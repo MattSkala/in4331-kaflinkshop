@@ -18,13 +18,26 @@
 
 package kaflinkshop;
 
+import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
+import org.apache.flink.api.common.state.ValueState;
+import org.apache.flink.api.common.state.ValueStateDescriptor;
+import org.apache.flink.api.java.tuple.Tuple;
+import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.api.java.tuple.Tuple3;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
+import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer011;
 import org.apache.flink.table.api.java.StreamTableEnvironment;
+import org.apache.flink.util.Collector;
 
+import java.time.LocalDateTime;
 import java.util.Properties;
+import java.util.UUID;
 
 /**
  * Skeleton for a Flink Streaming Job.
@@ -39,7 +52,6 @@ import java.util.Properties;
  * method, change the respective entry in the POM.xml file (simply search for 'mainClass').
  */
 public class UserJob {
-
 	public static void main(String[] args) throws Exception {
 		// set up the streaming execution environment
 		final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -55,6 +67,8 @@ public class UserJob {
 				.addSource(new FlinkKafkaConsumer011<>("users", new SimpleStringSchema(), properties));
 
 
+
+		stream.flatMap(new Splitter()).keyBy(0).process(new UserQueryProcess()).print();
 		/*
 		 * Here, you can start creating your execution plan for Flink.
 		 *
@@ -74,8 +88,26 @@ public class UserJob {
 		 * http://flink.apache.org/docs/latest/apis/streaming/index.html
 		 *
 		 */
+		stream.print();
 
 		// execute program
 		env.execute("User streaming job execution");
+	}
+
+	public static class Splitter implements FlatMapFunction<String, Tuple3<String, String, String>> {
+		@Override
+		public void flatMap(String sentence, Collector<Tuple3<String, String, String>> out) throws Exception {
+			String[] split_input = sentence.split(" ");
+			String id = "";
+			String action = split_input[0];
+			String name = "";
+			if(action.equals("create_user")){
+				id = UUID.randomUUID().toString();
+				name = split_input[1];
+			} else if(action.equals("get_user")){
+				id = split_input[1];
+			}
+			out.collect(new Tuple3<>(id, action, name));
+		}
 	}
 }
