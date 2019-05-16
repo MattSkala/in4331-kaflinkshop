@@ -32,9 +32,12 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer011;
+import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer011;
 import org.apache.flink.table.api.java.StreamTableEnvironment;
 import org.apache.flink.util.Collector;
-
+import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer011;
+import org.apache.flink.api.common.serialization.SimpleStringSchema;
+import org.apache.flink.api.common.functions.MapFunction;
 import java.time.LocalDateTime;
 import java.util.Properties;
 import java.util.UUID;
@@ -57,18 +60,21 @@ public class UserJob {
 		final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 		StreamTableEnvironment tableEnv = StreamTableEnvironment.create(env);
 
-
+		String kafkaAddress = "localhost:9092";
+		String outputTopic = "user_out";
+		String inputTopic = "user_in";
 
 		Properties properties = new Properties();
-		properties.setProperty("bootstrap.servers", "localhost:9092");
+		properties.setProperty("bootstrap.servers", kafkaAddress);
 		properties.setProperty("zookeeper.connect", "localhost:2181");
-		properties.setProperty("group.id", "test");
+		properties.setProperty("group.id", "kaflinkshop");
 		DataStream<String> stream = env
-				.addSource(new FlinkKafkaConsumer011<>("users", new SimpleStringSchema(), properties));
+				.addSource(new FlinkKafkaConsumer011<>(inputTopic, new SimpleStringSchema(), properties));
 
+		FlinkKafkaProducer011<String> flinkKafkaProducer = createStringProducer(
+				outputTopic, kafkaAddress);
 
-
-		stream.flatMap(new Splitter()).keyBy(0).process(new UserQueryProcess()).print();
+		stream.flatMap(new Splitter()).keyBy(0).process(new UserQueryProcess()).addSink(flinkKafkaProducer);
 		/*
 		 * Here, you can start creating your execution plan for Flink.
 		 *
@@ -110,4 +116,13 @@ public class UserJob {
 			out.collect(new Tuple3<>(id, action, name));
 		}
 	}
+
+	public static FlinkKafkaProducer011<String> createStringProducer(
+			String topic, String kafkaAddress){
+
+		return new FlinkKafkaProducer011<>(kafkaAddress,
+				topic, new SimpleStringSchema());
+	}
 }
+
+
