@@ -41,7 +41,6 @@ async def start_kafka_producer(app):
     print('started Kafka producer')
     app['producer'] = producer
 
-
 async def cleanup_kafka_producer(app):
     print('stopping Kafka producer')
     await app['producer'].stop()
@@ -86,13 +85,13 @@ async def send_request(app, topic, request):
     request_id = str(uuid.uuid1())
     request['request_id'] = request_id
 
-    # send the request to Kafka
-    await app['producer'].send_and_wait(topic, bytes(json.dumps(request), 'utf-8'))
-
     # create a Future that will receive the response
     loop = asyncio.get_running_loop()
     fut = loop.create_future()
     requests[request_id] = fut
+
+    # send the request to Kafka
+    await app['producer'].send_and_wait(topic, bytes(json.dumps(request), 'utf-8'))
 
     # set request timeout
     try:
