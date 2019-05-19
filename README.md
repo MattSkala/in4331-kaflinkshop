@@ -15,7 +15,7 @@ The application requires Python >= 3.7 and Apache Kafka running on the port `909
 
 ## Request Format
 
-The server handles HTTP routes defined in the `app.router`. Each route handler constructs the request object and sends the request to a Kafka queue designated to the specific service. All messages in Kafka should be serialized using JSON. Messages sent from the server to input topics should contain the following fields:
+The server handles HTTP routes defined in the `app.router`. Each route handler constructs the request object and sends the request to a Kafka queue designated to the specific service. All messages in Kafka should be serialized using JSON. Messages sent from the server to input topics contain the following fields:
 
 name | type | description
 --- | --- | ---
