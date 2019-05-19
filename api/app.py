@@ -10,10 +10,16 @@ SERVICE_ID = 'api1'
 
 # topics for sending requests to Kafka
 TOPIC_USERS_INPUT = 'user_in'
+TOPIC_ORDERS_INPUT = 'order_in'
+TOPIC_STOCK_INPUT = 'stock_in'
+TOPIC_PAYMENT_INPUT = 'payment_in'
 
 # topic for listening to responses from Kafka
 TOPIC_USERS_OUTPUT = 'user_out_' + SERVICE_ID
-OUTPUT_TOPICS = [TOPIC_USERS_OUTPUT]
+TOPIC_ORDERS_OUTPUT = 'orders_out_' + SERVICE_ID
+TOPIC_STOCK_OUTPUT = 'stock_out_' + SERVICE_ID
+TOPIC_PAYMENT_OUTPUT = 'payment_out_' + SERVICE_ID
+OUTPUT_TOPICS = [TOPIC_USERS_OUTPUT, TOPIC_ORDERS_OUTPUT, TOPIC_STOCK_OUTPUT, TOPIC_PAYMENT_OUTPUT]
 
 # Kafka bootstrap server for both consumer and producer
 KAFKA_BOOTSTRAP_SERVER = 'localhost:9092'
@@ -119,6 +125,8 @@ def route_handler(route, input_topic, output_topic):
 
 app = web.Application()
 app.router.add_get('/', hello)
+
+# User Service
 app.router.add_post('/users/create',
     route_handler('users/create', TOPIC_USERS_INPUT, TOPIC_USERS_OUTPUT))
 app.router.add_delete('/users/remove/{user_id}',
@@ -131,6 +139,38 @@ app.router.add_post('/users/credit/subtract/{user_id}/{amount}',
     route_handler('users/credit/subtract', TOPIC_USERS_INPUT, TOPIC_USERS_OUTPUT))
 app.router.add_post('/users/credit/add/{user_id}/{amount}',
     route_handler('users/credit/add', TOPIC_USERS_INPUT, TOPIC_USERS_OUTPUT))
+
+# Order Service
+app.router.add_post('/orders/create/{user_id}',
+    route_handler('orders/create', TOPIC_ORDERS_INPUT, TOPIC_ORDERS_OUTPUT))
+app.router.add_delete('/orders/remove/{order_id}',
+    route_handler('orders/remove', TOPIC_ORDERS_INPUT, TOPIC_ORDERS_OUTPUT))
+app.router.add_get('/orders/find/{order_id}',
+    route_handler('orders/find', TOPIC_ORDERS_INPUT, TOPIC_ORDERS_OUTPUT))
+app.router.add_post('/orders/addItem/{order_id}/{item_id}',
+    route_handler('orders/addItem', TOPIC_ORDERS_INPUT, TOPIC_ORDERS_OUTPUT))
+app.router.add_delete('/orders/removeItem/{order_id}/{item_id}',
+    route_handler('orders/removeItem', TOPIC_ORDERS_INPUT, TOPIC_ORDERS_OUTPUT))
+app.router.add_post('/orders/checkout/{order_id}/{item_id}',
+    route_handler('orders/checkout', TOPIC_ORDERS_INPUT, TOPIC_ORDERS_OUTPUT))
+
+# Stock Service
+app.router.add_get('/stock/availability/{item_id}',
+    route_handler('stock/availability', TOPIC_STOCK_INPUT, TOPIC_STOCK_OUTPUT))
+app.router.add_post('/stock/subtract/{item_id}/{number}',
+    route_handler('stock/subtract', TOPIC_STOCK_INPUT, TOPIC_STOCK_OUTPUT))
+app.router.add_post('/stock/add/{item_id}/{number}',
+    route_handler('stock/add', TOPIC_STOCK_INPUT, TOPIC_STOCK_OUTPUT))
+app.router.add_post('/stock/item/create',
+    route_handler('stock/item/create', TOPIC_STOCK_INPUT, TOPIC_STOCK_OUTPUT))
+
+# Payment Service
+app.router.add_post('/payment/pay/{user_id}/{order_id}',
+    route_handler('payment/pay', TOPIC_PAYMENT_INPUT, TOPIC_PAYMENT_OUTPUT))
+app.router.add_post('/payment/cancelPayment/{user_id}/{order_id}',
+    route_handler('payment/cancelPayment', TOPIC_PAYMENT_INPUT, TOPIC_PAYMENT_OUTPUT))
+app.router.add_get('/payment/status/{order_id}',
+    route_handler('payment/status', TOPIC_PAYMENT_INPUT, TOPIC_PAYMENT_OUTPUT))
 
 # https://aiohttp.readthedocs.io/en/stable/web_advanced.html#background-tasks
 app.on_startup.append(start_kafka_producer)
