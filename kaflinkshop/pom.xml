@@ -92,7 +92,7 @@ under the License.
 		<dependency>
 			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-table-planner_2.11</artifactId>
-			<version>1.8.0</version>
+			<version>${flink.version}</version>
 		</dependency>
 
 		<!-- Add logging framework, to produce console output when running in the IDE. -->
@@ -161,7 +161,7 @@ under the License.
 							</filters>
 							<transformers>
 								<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-									<mainClass>kaflinkshop.StreamingJob</mainClass>
+									<mainClass>kaflinkshop.UserJob</mainClass>
 								</transformer>
 							</transformers>
 						</configuration>

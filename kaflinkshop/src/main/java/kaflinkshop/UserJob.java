@@ -26,7 +26,10 @@ import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
@@ -41,6 +44,11 @@ import org.apache.flink.api.common.functions.MapFunction;
 import java.time.LocalDateTime;
 import java.util.Properties;
 import java.util.UUID;
+
+import kaflinkshop.UserState;
+import kaflinkshop.UserQueryProcess;
+
+
 
 /**
  * Skeleton for a Flink Streaming Job.
@@ -61,63 +69,51 @@ public class UserJob {
 		StreamTableEnvironment tableEnv = StreamTableEnvironment.create(env);
 
 		String kafkaAddress = "localhost:9092";
-		String outputTopic = "user_out";
+		String outputTopic = "user_out_api1";
 		String inputTopic = "user_in";
 
 		Properties properties = new Properties();
 		properties.setProperty("bootstrap.servers", kafkaAddress);
 		properties.setProperty("zookeeper.connect", "localhost:2181");
-		properties.setProperty("group.id", "kaflinkshop");
 		DataStream<String> stream = env
 				.addSource(new FlinkKafkaConsumer011<>(inputTopic, new SimpleStringSchema(), properties));
 
-		FlinkKafkaProducer011<String> flinkKafkaProducer = createStringProducer(
+		FlinkKafkaProducer011<String> flinkKafkaProducer = createProducer(
 				outputTopic, kafkaAddress);
 
 		stream.flatMap(new Splitter()).keyBy(0).process(new UserQueryProcess()).addSink(flinkKafkaProducer);
-		/*
-		 * Here, you can start creating your execution plan for Flink.
-		 *
-		 * Start with getting some data from the environment, like
-		 * 	env.readTextFile(textPath);
-		 *
-		 * then, transform the resulting DataStream<String> using operations
-		 * like
-		 * 	.filter()
-		 * 	.flatMap()
-		 * 	.join()
-		 * 	.coGroup()
-		 *
-		 * and many more.
-		 * Have a look at the programming guide for the Java API:
-		 *
-		 * http://flink.apache.org/docs/latest/apis/streaming/index.html
-		 *
-		 */
 		stream.print();
 
 		// execute program
 		env.execute("User streaming job execution");
 	}
 
-	public static class Splitter implements FlatMapFunction<String, Tuple3<String, String, String>> {
+	public static class Splitter implements FlatMapFunction<String, Tuple2<String, JsonNode>> {
+		private transient ObjectMapper jsonParser;
+
 		@Override
-		public void flatMap(String sentence, Collector<Tuple3<String, String, String>> out) throws Exception {
-			String[] split_input = sentence.split(" ");
-			String id = "";
-			String action = split_input[0];
-			String name = "";
-			if(action.equals("create_user")){
-				id = UUID.randomUUID().toString();
-				name = split_input[1];
-			} else if(action.equals("get_user")){
-				id = split_input[1];
+		public void flatMap(String value, Collector<Tuple2<String, JsonNode>> out) throws Exception {
+			if (jsonParser == null) {
+				jsonParser = new ObjectMapper();
 			}
-			out.collect(new Tuple3<>(id, action, name));
+			JsonNode jsonNode = jsonParser.readValue(value, JsonNode.class);
+
+			JsonNode params = jsonNode.get("params");
+			String user_id;
+
+			if(params.has("user_id")){
+				System.out.println("Getting used key");
+				user_id = params.get("user_id").asText();
+			} else {
+				System.out.println("Creating new key");
+				user_id = UUID.randomUUID().toString();
+			}
+			System.out.println(user_id);
+			out.collect(new Tuple2<>(user_id, jsonNode));
 		}
 	}
 
-	public static FlinkKafkaProducer011<String> createStringProducer(
+	public static FlinkKafkaProducer011<String> createProducer(
 			String topic, String kafkaAddress){
 
 		return new FlinkKafkaProducer011<>(kafkaAddress,
