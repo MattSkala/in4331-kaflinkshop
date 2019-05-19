@@ -104,43 +104,33 @@ async def hello(request):
     return web.Response(text='Welcome to KaflinkShop!')
 
 
-async def create_user(request):
-    data = await request.post()    
+def route_handler(route, input_topic, output_topic):
+    async def handle(request):
+        response = await send_request(request.app, input_topic, {
+            'sink': output_topic,
+            'route': route,
+            'params': dict(request.match_info)
+        })
 
-    if 'name' not in data:
-        return web.HTTPBadRequest(reason='Parameter name is missing')
+        return web.json_response(response)
 
-    name = data['name']
-
-    response = await send_request(request.app, TOPIC_USERS_INPUT, {
-        'sink': TOPIC_USERS_OUTPUT,
-        'method': 'create_user',
-        'params': {
-            'name': name
-        }
-    })
-
-    return web.json_response(response)
-
-
-async def find_user(request):    
-    user_id = request.match_info.get('user_id')        
-
-    response = await send_request(request.app, TOPIC_USERS_INPUT, {
-        'sink': TOPIC_USERS_OUTPUT,
-        'method': 'find_user',
-        'params': {
-            'user_id': user_id
-        }
-    })
-
-    return web.json_response(response)
+    return handle
 
 
 app = web.Application()
 app.router.add_get('/', hello)
-app.router.add_post('/users/create', create_user)
-app.router.add_get('/users/find/{user_id}', find_user)
+app.router.add_post('/users/create',
+    route_handler('users/create', TOPIC_USERS_INPUT, TOPIC_USERS_OUTPUT))
+app.router.add_delete('/users/remove/{user_id}',
+    route_handler('users/remove', TOPIC_USERS_INPUT, TOPIC_USERS_OUTPUT))
+app.router.add_get('/users/find/{user_id}',
+    route_handler('users/find', TOPIC_USERS_INPUT, TOPIC_USERS_OUTPUT))
+app.router.add_get('/users/credit/{user_id}',
+    route_handler('users/credit', TOPIC_USERS_INPUT, TOPIC_USERS_OUTPUT))
+app.router.add_post('/users/credit/subtract/{user_id}/{amount}',
+    route_handler('users/credit/subtract', TOPIC_USERS_INPUT, TOPIC_USERS_OUTPUT))
+app.router.add_post('/users/credit/add/{user_id}/{amount}',
+    route_handler('users/credit/add', TOPIC_USERS_INPUT, TOPIC_USERS_OUTPUT))
 
 # https://aiohttp.readthedocs.io/en/stable/web_advanced.html#background-tasks
 app.on_startup.append(start_kafka_producer)

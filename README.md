@@ -23,17 +23,17 @@ name | type | description
 --- | --- | ---
 `request_id` | `string` | A unique request ID that should also be included in the response
 `sink` | `string` | The Kafka topic into which the response should be sent
-`method` | `string` | The API method code
-`params` | `object` | Request parameters
+`route` | `string` | The API route name
+`params` | `object?` | Request parameters
 
 Example:
 ```
 {
     "request_id": "4423f650-7a14-11e9-b9a4-80e6501cc886",
     "sink": "user_out_api1",
-    "method": "find_user",
+    "method": "users/find",
     "params": {
-        "user_id": 1
+        "user_id": "1"
     }
 }
 ```
@@ -47,7 +47,8 @@ Example:
 ```
 {
     "request_id": "4423f650-7a14-11e9-b9a4-80e6501cc886",  
-    "name": "Matt"
+    "user_id": "1",
+    "credit": 1000000
 }
 ```
 
