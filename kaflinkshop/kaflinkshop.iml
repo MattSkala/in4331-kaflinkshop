@@ -53,6 +53,8 @@
     <orderEntry type="library" name="Maven: org.apache.flink:flink-clients_2.11:1.8.0" level="project" />
     <orderEntry type="library" name="Maven: org.apache.flink:flink-optimizer_2.11:1.8.0" level="project" />
     <orderEntry type="library" name="Maven: org.apache.flink:flink-shaded-guava:18.0-6.0" level="project" />
+    <orderEntry type="library" name="Maven: org.apache.flink:flink-statebackend-rocksdb_2.11:1.8.0" level="project" />
+    <orderEntry type="library" name="Maven: com.data-artisans:frocksdbjni:5.17.2-artisans-1.0" level="project" />
     <orderEntry type="library" name="Maven: org.apache.flink:flink-connector-wikiedits_2.11:1.8.0" level="project" />
     <orderEntry type="library" name="Maven: org.schwering:irclib:1.10" level="project" />
     <orderEntry type="library" name="Maven: org.apache.flink:flink-connector-kafka-0.11_2.11:1.8.0" level="project" />
