@@ -66,7 +66,6 @@ public class UserJob {
 	public static void main(String[] args) throws Exception {
 		// set up the streaming execution environment
 		final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-		StreamTableEnvironment tableEnv = StreamTableEnvironment.create(env);
 
 		String kafkaAddress = "localhost:9092";
 		String outputTopic = "user_out_api1";
@@ -102,13 +101,12 @@ public class UserJob {
 			String user_id;
 
 			if(params.has("user_id")){
-				System.out.println("Getting used key");
+//				System.out.println("Getting used key");
 				user_id = params.get("user_id").asText();
 			} else {
-				System.out.println("Creating new key");
+//				System.out.println("Creating new key");
 				user_id = UUID.randomUUID().toString();
 			}
-			System.out.println(user_id);
 			out.collect(new Tuple2<>(user_id, jsonNode));
 		}
 	}

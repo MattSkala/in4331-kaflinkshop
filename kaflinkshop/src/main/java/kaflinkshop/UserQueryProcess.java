@@ -48,6 +48,18 @@ public class UserQueryProcess
             case "users/find":
                 output = FindUser(value_node);
                 break;
+            case "users/remove":
+                output = RemoveUser(value_node);
+                break;
+            case "users/credit":
+                output = GetCredits(value_node);
+                break;
+            case "users/credit/subtract":
+                output = SubtractCredits(value_node);
+                break;
+            case "users/credit/add":
+                output = AddCredits(value_node);
+                break;
             default:
                 output = ErrorState(value_node);
         }
@@ -62,31 +74,112 @@ public class UserQueryProcess
         return jNode.toString();
     }
 
-    private ObjectNode CreateOutput(JsonNode input_node){
-        ObjectNode jNode = jsonParser.createObjectNode();
-        jNode.put("request_id", input_node.get("request_id"));
-        return jNode;
-    }
-
-    private String FindUser(JsonNode value_node) throws Exception {
-        if (jsonParser == null) {
-            jsonParser = new ObjectMapper();
-        }
+    private String AddCredits(JsonNode value_node) throws Exception{
         ObjectNode jNode = CreateOutput(value_node);
-
         // retrieve the current count
         UserState current = state.value();
 
-        System.out.println(current);
+        JsonNode params = value_node.get("params");
+        long delta_credits = params.get("amount").asLong();
+
+        if (current == null) {
+            jNode.put("error", "Something went wrong!");
+        } else {
+
+            current.credits += delta_credits;
+            state.update(current);
+            jNode.put("message", "Added credits");
+            jNode.put("result", "success");
+            jNode.put("id", current.id);
+            jNode.put("credits", current.credits);
+        }
+        return jNode.toString();
+    }
+
+    private String SubtractCredits(JsonNode value_node) throws Exception{
+        ObjectNode jNode = CreateOutput(value_node);
+        // retrieve the current count
+        UserState current = state.value();
+
+        JsonNode params = value_node.get("params");
+        long delta_credits = params.get("amount").asLong();
+
+        if (current == null) {
+            jNode.put("error", "Something went wrong!");
+        } else {
+            if(current.credits >= delta_credits) {
+                current.credits -= delta_credits;
+                state.update(current);
+                jNode.put("result", "success");
+                jNode.put("message", "Credits substracted");
+            } else {
+                jNode.put("result", "failure");
+                jNode.put("message", "Not enough credits left");
+            }
+
+            jNode.put("id", current.id);
+            jNode.put("credits", current.credits);
+        }
+        return jNode.toString();
+    }
+
+    private String GetCredits(JsonNode value_node) throws Exception{
+        ObjectNode jNode = CreateOutput(value_node);
+        // retrieve the current count
+        UserState current = state.value();
 
         if (current == null) {
             jNode.put("error", "Something went wrong!");
         } else {
             jNode.put("id", current.id);
             jNode.put("credits", current.credits);
+        }
+        return jNode.toString();
+    }
+
+    private ObjectNode CreateOutput(JsonNode input_node){
+        if (jsonParser == null) {
+            jsonParser = new ObjectMapper();
+        }
+        ObjectNode jNode = jsonParser.createObjectNode();
+        jNode.put("request_id", input_node.get("request_id"));
+        return jNode;
+    }
+
+    private String RemoveUser(JsonNode value_node) throws Exception {
+        ObjectNode jNode = CreateOutput(value_node);
+
+        // retrieve the current count
+        UserState current = state.value();
+
+        if (current == null) {
+            jNode.put("result", "failure");
+            jNode.put("message", "Could not find this user");
+        } else {
+            state.update(null);
+            jNode.put("result", "success");
+            jNode.put("message", "Correctly deleted the user");
+
+        }
+
+        return jNode.toString();
+
+    }
+
+
+    private String FindUser(JsonNode value_node) throws Exception {
+        ObjectNode jNode = CreateOutput(value_node);
+
+        // retrieve the current count
+        UserState current = state.value();
+        if (current == null) {
+            jNode.put("error", "Something went wrong!");
+        } else {
+            current.logins++;
+            jNode.put("id", current.id);
+            jNode.put("credits", current.credits);
             jNode.put("logins", current.logins);
 
-            current.logins++;
             state.update(current);
         }
 
@@ -97,10 +190,6 @@ public class UserQueryProcess
     private String CreateUser(JsonNode value_node, String user_id) throws Exception {
         UserState current = new UserState();
         current.id = user_id;
-
-        if (jsonParser == null) {
-            jsonParser = new ObjectMapper();
-        }
 
         ObjectNode jNode = CreateOutput(value_node);
         jNode.put("id", current.id);
