@@ -35,7 +35,7 @@ requests = {}
 async def start_kafka_producer(app):
     print('starting Kafka producer')
     producer = AIOKafkaProducer(
-        loop=asyncio.get_running_loop(), 
+        loop=asyncio.get_running_loop(),
         bootstrap_servers=KAFKA_BOOTSTRAP_SERVER)
     await producer.start()
     print('started Kafka producer')
@@ -46,17 +46,20 @@ async def cleanup_kafka_producer(app):
     await app['producer'].stop()
 
 async def listen_kafka_consumer(consumer):
-    async for msg in consumer:        
+    async for msg in consumer:
         print('received response: ' + str(msg.value))
 
         try:
-            response = json.loads(msg.value)        
-            
+            response = json.loads(msg.value)
+
             request_id = response['request_id']
 
             if (request_id in requests):
                 print('response delivered to request #' + str(request_id))
-                requests[request_id].set_result(response)
+                try:
+                    requests[request_id].set_result(response)
+                except:
+                    print('The user cancelled the request')
                 del requests[request_id]
             else:
                 print('no matching request found')
@@ -66,7 +69,7 @@ async def listen_kafka_consumer(consumer):
 async def start_kafka_consumer(app):
     print('starting Kafka consumer')
     consumer = AIOKafkaConsumer(*OUTPUT_TOPICS,
-        loop=asyncio.get_running_loop(), 
+        loop=asyncio.get_running_loop(),
         bootstrap_servers=KAFKA_BOOTSTRAP_SERVER)
     await consumer.start()
     print('started Kafka consumer')
