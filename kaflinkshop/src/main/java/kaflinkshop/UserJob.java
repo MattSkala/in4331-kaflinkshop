@@ -20,34 +20,22 @@ package kaflinkshop;
 
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
-import org.apache.flink.api.common.state.ValueState;
-import org.apache.flink.api.common.state.ValueStateDescriptor;
-import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.tuple.Tuple2;
-import org.apache.flink.api.java.tuple.Tuple3;
+import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.contrib.streaming.state.RocksDBStateBackend;
+import org.apache.flink.contrib.streaming.state.RocksDBStateBackendFactory;
+import org.apache.flink.runtime.state.StateBackend;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.environment.CheckpointConfig;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
-import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer011;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer011;
-import org.apache.flink.table.api.java.StreamTableEnvironment;
 import org.apache.flink.util.Collector;
-import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer011;
-import org.apache.flink.api.common.serialization.SimpleStringSchema;
-import org.apache.flink.api.common.functions.MapFunction;
-import java.time.LocalDateTime;
+
 import java.util.Properties;
 import java.util.UUID;
-
-import kaflinkshop.UserState;
-import kaflinkshop.UserQueryProcess;
 
 
 
@@ -67,12 +55,34 @@ public class UserJob {
 	public static void main(String[] args) throws Exception {
 		// set up the streaming execution environment
 		final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-//		env.setStateBackend(new RocksDBStateBackend("file:///root/Documents/TU_Delft/WebData/backendRocks", true));
+
+		String filebackend = "file:///root/Documents/TU_Delft/WebData/rocksDB/";
+		String savebackend = "file:///root/Documents/TU_Delft/WebData/saveDB/";
+
+		CheckpointConfig checkpointConfig = env.getCheckpointConfig();
+		checkpointConfig.enableExternalizedCheckpoints(CheckpointConfig.ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION);
+
+		Configuration config = new Configuration();
+		config.setString(CheckpointingOptions.CHECKPOINTS_DIRECTORY, filebackend);
+
+		/*
+		Task local recovery can be enabled, the idea is here:
+		https://ci.apache.org/projects/flink/flink-docs-stable/ops/state/large_state_tuning.html
+		 */
+
+		config.setBoolean(CheckpointingOptions.LOCAL_RECOVERY, true);
+		config.setBoolean(CheckpointingOptions.INCREMENTAL_CHECKPOINTS, false);
+		config.setString(CheckpointingOptions.SAVEPOINT_DIRECTORY, savebackend);
+
+		RocksDBStateBackendFactory factory = new RocksDBStateBackendFactory();
+		StateBackend backend = factory.createFromConfig(config, null);
+
+		env.enableCheckpointing(10000);
+		env.setStateBackend(backend);
 
 		String kafkaAddress = "localhost:9092";
 		String outputTopic = "user_out_api1";
 		String inputTopic = "user_in";
-
 		Properties properties = new Properties();
 		properties.setProperty("bootstrap.servers", kafkaAddress);
 		properties.setProperty("zookeeper.connect", "localhost:2181");
@@ -83,7 +93,6 @@ public class UserJob {
 				outputTopic, kafkaAddress);
 
 		stream.flatMap(new Splitter()).keyBy(0).process(new UserQueryProcess()).addSink(flinkKafkaProducer);
-		stream.print();
 
 		// execute program
 		env.execute("User streaming job execution");
@@ -97,8 +106,13 @@ public class UserJob {
 			if (jsonParser == null) {
 				jsonParser = new ObjectMapper();
 			}
-			JsonNode jsonNode = jsonParser.readValue(value, JsonNode.class);
-
+			JsonNode jsonNode;
+			try {
+				jsonNode = jsonParser.readValue(value, JsonNode.class);
+			} catch(Exception e){
+				System.out.println("Could not be parsed");
+				return;
+			}
 			JsonNode params = jsonNode.get("params");
 			String user_id;
 
@@ -113,7 +127,7 @@ public class UserJob {
 		}
 	}
 
-	public static FlinkKafkaProducer011<String> createProducer(
+	private static FlinkKafkaProducer011<String> createProducer(
 			String topic, String kafkaAddress){
 
 		return new FlinkKafkaProducer011<>(kafkaAddress,
