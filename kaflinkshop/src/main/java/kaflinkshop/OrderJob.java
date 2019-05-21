@@ -69,40 +69,11 @@ public class OrderJob {
 		FlinkKafkaProducer011<Tuple2<String, String>> flinkKafkaProducer = createProducer(
 				outputTopic, kafkaAddress);
 
-		stream.flatMap(new Splitter()).keyBy(0).process(new OrderQueryProcess()).addSink(flinkKafkaProducer);
+		stream.flatMap(new JsonParser()).keyBy(0).process(new OrderQueryProcess()).addSink(flinkKafkaProducer);
 
 		stream.print();
 		// execute program
 		env.execute("User streaming job execution");
-	}
-
-	public static class Splitter implements FlatMapFunction<String, Tuple2<String, JsonNode>> {
-		private transient ObjectMapper jsonParser;
-
-		@Override
-		public void flatMap(String value, Collector<Tuple2<String, JsonNode>> out) throws Exception {
-			if (jsonParser == null) {
-				jsonParser = new ObjectMapper();
-			}
-			JsonNode jsonNode;
-			try {
-				jsonNode = jsonParser.readValue(value, JsonNode.class);
-			} catch(Exception e){
-				System.out.println("Could not be parsed");
-				return;
-			}
-			JsonNode params = jsonNode.get("params");
-			String order_id;
-
-			if(params.has("order_id")){
-//				System.out.println("Getting used key");
-				order_id = params.get("order_id").asText();
-			} else {
-//				System.out.println("Creating new key");
-				order_id = UUID.randomUUID().toString();
-			}
-			out.collect(new Tuple2<>(order_id, jsonNode));
-		}
 	}
 
 	private static FlinkKafkaProducer011<Tuple2<String, String>> createProducer(
