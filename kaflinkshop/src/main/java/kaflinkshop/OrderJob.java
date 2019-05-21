@@ -32,11 +32,11 @@ import org.apache.flink.streaming.api.environment.CheckpointConfig;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer011;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer011;
+import org.apache.flink.streaming.util.serialization.KeyedSerializationSchema;
 import org.apache.flink.util.Collector;
 
 import java.util.Properties;
 import java.util.UUID;
-
 
 
 /**
@@ -51,50 +51,27 @@ import java.util.UUID;
  * <p>If you change the name of the main class (with the public static void main(String[] args))
  * method, change the respective entry in the POM.xml file (simply search for 'mainClass').
  */
-public class UserJob {
+public class OrderJob {
 	public static void main(String[] args) throws Exception {
 		// set up the streaming execution environment
 		final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
-//		String filebackend = "file:///root/Documents/TU_Delft/WebData/rocksDB/";
-//		String savebackend = "file:///root/Documents/TU_Delft/WebData/saveDB/";
-//
-//		CheckpointConfig checkpointConfig = env.getCheckpointConfig();
-//		checkpointConfig.enableExternalizedCheckpoints(CheckpointConfig.ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION);
-//
-//		Configuration config = new Configuration();
-//		config.setString(CheckpointingOptions.CHECKPOINTS_DIRECTORY, filebackend);
-//
-//		/*
-//		Task local recovery can be enabled, the idea is here:
-//		https://ci.apache.org/projects/flink/flink-docs-stable/ops/state/large_state_tuning.html
-//		 */
-//
-//		config.setBoolean(CheckpointingOptions.LOCAL_RECOVERY, true);
-//		config.setBoolean(CheckpointingOptions.INCREMENTAL_CHECKPOINTS, false);
-//		config.setString(CheckpointingOptions.SAVEPOINT_DIRECTORY, savebackend);
-//
-//		RocksDBStateBackendFactory factory = new RocksDBStateBackendFactory();
-//		StateBackend backend = factory.createFromConfig(config, null);
-//
-//		env.enableCheckpointing(10000);
-//		env.setStateBackend(backend);
 
 		String kafkaAddress = "localhost:9092";
-		String outputTopic = "user_out_api1";
-		String inputTopic = "user_in";
+		String outputTopic = "order_out_api1";
+		String inputTopic = "order_in";
 		Properties properties = new Properties();
 		properties.setProperty("bootstrap.servers", kafkaAddress);
 		properties.setProperty("zookeeper.connect", "localhost:2181");
 		DataStream<String> stream = env
 				.addSource(new FlinkKafkaConsumer011<>(inputTopic, new SimpleStringSchema(), properties));
 
-		FlinkKafkaProducer011<String> flinkKafkaProducer = createProducer(
+		FlinkKafkaProducer011<Tuple2<String, String>> flinkKafkaProducer = createProducer(
 				outputTopic, kafkaAddress);
+
+		stream.flatMap(new Splitter()).keyBy(0).process(new OrderQueryProcess()).addSink(flinkKafkaProducer);
+
 		stream.print();
-
-		stream.flatMap(new Splitter()).keyBy(0).process(new UserQueryProcess()).addSink(flinkKafkaProducer);
-
 		// execute program
 		env.execute("User streaming job execution");
 	}
@@ -115,26 +92,40 @@ public class UserJob {
 				return;
 			}
 			JsonNode params = jsonNode.get("params");
-			String user_id;
+			String order_id;
 
-			System.out.println(jsonNode.toString());
-
-			if(params.has("user_id")){
+			if(params.has("order_id")){
 //				System.out.println("Getting used key");
-				user_id = params.get("user_id").asText();
+				order_id = params.get("order_id").asText();
 			} else {
 //				System.out.println("Creating new key");
-				user_id = UUID.randomUUID().toString();
+				order_id = UUID.randomUUID().toString();
 			}
-			out.collect(new Tuple2<>(user_id, jsonNode));
+			out.collect(new Tuple2<>(order_id, jsonNode));
 		}
 	}
 
-	private static FlinkKafkaProducer011<String> createProducer(
+	private static FlinkKafkaProducer011<Tuple2<String, String>> createProducer(
 			String topic, String kafkaAddress){
 
 		return new FlinkKafkaProducer011<>(kafkaAddress,
-				topic, new SimpleStringSchema());
+				topic, new KeyedSerializationSchema<Tuple2<String, String>>() {
+			@Override
+			public byte[] serializeKey( Tuple2<String, String> element ) {
+				return null;
+			}
+
+			@Override
+			public byte[] serializeValue( Tuple2<String, String> element ) {
+				return element.f1.getBytes();
+			}
+
+			@Override
+			public String getTargetTopic(Tuple2<String, String> element ) {
+				System.out.println("Sending " + element.f1 + " to " + element.f0);
+				return element.f0;
+			}
+		});
 	}
 }
 

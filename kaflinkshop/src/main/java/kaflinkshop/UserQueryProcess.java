@@ -11,6 +11,8 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.Obje
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
 
+import java.util.HashSet;
+
 public class UserQueryProcess
         extends KeyedProcessFunction<Tuple, Tuple2<String, JsonNode>, String> {
 
@@ -20,7 +22,7 @@ public class UserQueryProcess
     private ValueState<UserState> state;
 
     @Override
-    public void open(Configuration parameters) throws Exception {
+    public void open(Configuration parameters) {
         state = getRuntimeContext().getState(new ValueStateDescriptor<>("user_state", UserState.class));
     }
 
@@ -57,6 +59,9 @@ public class UserQueryProcess
             case "users/credit/add":
                 output = AddCredits(value_node);
                 break;
+            case "orders/create":
+                output = CreateOrder(value_node);
+                break;
             default:
                 output = ErrorState(value_node);
         }
@@ -65,13 +70,36 @@ public class UserQueryProcess
 
     }
 
-    private String ErrorState(JsonNode value_node){
+    private String CreateOrder(JsonNode value_node) throws Exception{
+        ObjectNode jNode = CreateOutput(value_node);
+        // retrieve the current count
+        UserState current = state.value();
+
+        JsonNode params = value_node.get("params");
+        String order_id = params.get("order_id").asText();
+        System.out.println("Creating order");
+        if (current == null) {
+            // Send back to the order that we do not have an user!!!!
+
+            jNode.put("error", "No user to create this order!");
+        } else {
+            current.order_ids.add(order_id);
+            state.update(current);
+            jNode.put("message", "Created an order");
+            jNode.put("result", "success");
+            jNode.put("order_id", order_id);
+            jNode.put("user_id", current.id);
+        }
+        return jNode.toString();
+    }
+
+    private String ErrorState(JsonNode value_node) {
         ObjectNode jNode = CreateOutput(value_node);
         jNode.put("Error", "Something went wrong");
         return jNode.toString();
     }
 
-    private String AddCredits(JsonNode value_node) throws Exception{
+    private String AddCredits(JsonNode value_node) throws Exception {
         ObjectNode jNode = CreateOutput(value_node);
         // retrieve the current count
         UserState current = state.value();
@@ -93,7 +121,7 @@ public class UserQueryProcess
         return jNode.toString();
     }
 
-    private String SubtractCredits(JsonNode value_node) throws Exception{
+    private String SubtractCredits(JsonNode value_node) throws Exception {
         ObjectNode jNode = CreateOutput(value_node);
         // retrieve the current count
         UserState current = state.value();
@@ -104,7 +132,7 @@ public class UserQueryProcess
         if (current == null) {
             jNode.put("error", "Something went wrong!");
         } else {
-            if(current.credits >= delta_credits) {
+            if (current.credits >= delta_credits) {
                 current.credits -= delta_credits;
                 state.update(current);
                 jNode.put("result", "success");
@@ -120,7 +148,7 @@ public class UserQueryProcess
         return jNode.toString();
     }
 
-    private String GetCredits(JsonNode value_node) throws Exception{
+    private String GetCredits(JsonNode value_node) throws Exception {
         ObjectNode jNode = CreateOutput(value_node);
         // retrieve the current count
         UserState current = state.value();
@@ -134,7 +162,7 @@ public class UserQueryProcess
         return jNode.toString();
     }
 
-    private ObjectNode CreateOutput(JsonNode input_node){
+    private ObjectNode CreateOutput(JsonNode input_node) {
         if (jsonParser == null) {
             jsonParser = new ObjectMapper();
         }
@@ -187,7 +215,7 @@ public class UserQueryProcess
     private String CreateUser(JsonNode value_node, String user_id) throws Exception {
         UserState current = new UserState();
         current.id = user_id;
-
+        current.order_ids = new HashSet<>();
         ObjectNode jNode = CreateOutput(value_node);
         jNode.put("id", current.id);
         // write the state back
