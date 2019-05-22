@@ -10,6 +10,11 @@ import java.util.UUID;
 
 public class JsonParser implements FlatMapFunction<String, Tuple2<String, JsonNode>> {
     private transient ObjectMapper jsonParser;
+    private final String idParam;
+
+    JsonParser(String idParam) {
+        this.idParam = idParam;
+    }
 
     @Override
     public void flatMap(String value, Collector<Tuple2<String, JsonNode>> out) throws Exception {
@@ -19,23 +24,22 @@ public class JsonParser implements FlatMapFunction<String, Tuple2<String, JsonNo
         JsonNode jsonNode;
         try {
             jsonNode = jsonParser.readValue(value, JsonNode.class);
-        } catch(Exception e){
+        } catch (Exception e) {
             System.out.println("Could not be parsed");
             return;
         }
         JsonNode params = jsonNode.get("params");
-        String user_id;
+        String id;
 
         System.out.println(jsonNode.toString());
 
-        if(params.has("user_id")){
-//				System.out.println("Getting used key");
-            user_id = params.get("user_id").asText();
+        if (params.has(idParam)) {
+            id = params.get(idParam).asText();
         } else {
-//				System.out.println("Creating new key");
-            user_id = UUID.randomUUID().toString();
+            id = UUID.randomUUID().toString();
         }
-        out.collect(new Tuple2<>(user_id, jsonNode));
+
+        out.collect(new Tuple2<>(id, jsonNode));
     }
 }
 

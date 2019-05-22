@@ -18,25 +18,13 @@
 
 package kaflinkshop;
 
-import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
-import org.apache.flink.api.java.tuple.Tuple2;
-import org.apache.flink.configuration.CheckpointingOptions;
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.contrib.streaming.state.RocksDBStateBackendFactory;
-import org.apache.flink.runtime.state.StateBackend;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.streaming.api.datastream.DataStream;
-import org.apache.flink.streaming.api.environment.CheckpointConfig;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer011;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer011;
-import org.apache.flink.util.Collector;
 
 import java.util.Properties;
-import java.util.UUID;
-
 
 
 /**
@@ -51,38 +39,14 @@ import java.util.UUID;
  * <p>If you change the name of the main class (with the public static void main(String[] args))
  * method, change the respective entry in the POM.xml file (simply search for 'mainClass').
  */
-public class UserJob {
+public class StockJob {
 	public static void main(String[] args) throws Exception {
 		// set up the streaming execution environment
 		final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
-//		String filebackend = "file:///root/Documents/TU_Delft/WebData/rocksDB/";
-//		String savebackend = "file:///root/Documents/TU_Delft/WebData/saveDB/";
-//
-//		CheckpointConfig checkpointConfig = env.getCheckpointConfig();
-//		checkpointConfig.enableExternalizedCheckpoints(CheckpointConfig.ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION);
-//
-//		Configuration config = new Configuration();
-//		config.setString(CheckpointingOptions.CHECKPOINTS_DIRECTORY, filebackend);
-//
-//		/*
-//		Task local recovery can be enabled, the idea is here:
-//		https://ci.apache.org/projects/flink/flink-docs-stable/ops/state/large_state_tuning.html
-//		 */
-//
-//		config.setBoolean(CheckpointingOptions.LOCAL_RECOVERY, true);
-//		config.setBoolean(CheckpointingOptions.INCREMENTAL_CHECKPOINTS, false);
-//		config.setString(CheckpointingOptions.SAVEPOINT_DIRECTORY, savebackend);
-//
-//		RocksDBStateBackendFactory factory = new RocksDBStateBackendFactory();
-//		StateBackend backend = factory.createFromConfig(config, null);
-//
-//		env.enableCheckpointing(10000);
-//		env.setStateBackend(backend);
-
 		String kafkaAddress = "localhost:9092";
-		String outputTopic = "user_out_api1";
-		String inputTopic = "user_in";
+		String outputTopic = "stock_out_api1";
+		String inputTopic = "stock_in";
 		Properties properties = new Properties();
 		properties.setProperty("bootstrap.servers", kafkaAddress);
 		properties.setProperty("zookeeper.connect", "localhost:2181");
@@ -93,15 +57,15 @@ public class UserJob {
 				outputTopic, kafkaAddress);
 		stream.print();
 
-		stream.flatMap(new JsonParser("user_id")).keyBy(0).process(new UserQueryProcess()).addSink(flinkKafkaProducer);
+		stream.flatMap(new JsonParser("item_id")).keyBy(0).process(new StockQueryProcess()).addSink(flinkKafkaProducer);
 
 		// execute program
-		env.execute("User streaming job execution");
+		env.execute("Stock streaming job execution");
 	}
 
 
 	private static FlinkKafkaProducer011<String> createProducer(
-			String topic, String kafkaAddress){
+			String topic, String kafkaAddress) {
 
 		return new FlinkKafkaProducer011<>(kafkaAddress,
 				topic, new SimpleStringSchema());
