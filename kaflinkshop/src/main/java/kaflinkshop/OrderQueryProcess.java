@@ -19,8 +19,6 @@ import java.util.List;
 public class OrderQueryProcess
         extends KeyedProcessFunction<Tuple, Tuple2<String, JsonNode>, Tuple2<String, String>> {
 
-    public static int WAIT_FOR_CALLBACK = 60000;
-
     /**
      * The state that is maintained by this process function
      */
@@ -64,6 +62,7 @@ public class OrderQueryProcess
                 break;
             case "order/checkout":
                 //Need multiple nodes
+
             default:
                 output = ErrorState(value_node);
         }
@@ -92,7 +91,7 @@ public class OrderQueryProcess
     private Tuple2<String, String> ErrorState(JsonNode value_node){
         ObjectNode jNode = CreateOutput(value_node);
         jNode.put("Error", "Something went wrong");
-        return CommunicationFactory.createOutput("order_out_api1", jNode.toString());
+        return CommunicationFactory.createOutput(CommunicationFactory.ORDER_OUT_TOPIC, jNode.toString());
     }
 
     private Tuple2<String, String> CreateOrder(JsonNode value_node, String order_id) throws Exception {
@@ -103,7 +102,7 @@ public class OrderQueryProcess
 
         // write the state back
         state.update(current);
-        return CommunicationFactory.createOutput("user_in", jNode.toString());
+        return CommunicationFactory.createOutput(CommunicationFactory.USER_IN_TOPIC, jNode.toString());
     }
 
     private ObjectNode CreateOutput(JsonNode input_node){
