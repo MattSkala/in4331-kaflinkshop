@@ -92,7 +92,7 @@ public class OrderQueryProcess
     private Tuple2<String, String> ErrorState(JsonNode value_node){
         ObjectNode jNode = CreateOutput(value_node);
         jNode.put("Error", "Something went wrong");
-        return new Tuple2("order_out_api1", jNode.toString());
+        return CommunicationFactory.createOutput("order_out_api1", jNode.toString());
     }
 
     private Tuple2<String, String> CreateOrder(JsonNode value_node, String order_id) throws Exception {
@@ -103,7 +103,7 @@ public class OrderQueryProcess
 
         // write the state back
         state.update(current);
-        return new Tuple2("user_in", jNode.toString());
+        return CommunicationFactory.createOutput("user_in", jNode.toString());
     }
 
     private ObjectNode CreateOutput(JsonNode input_node){
@@ -134,7 +134,7 @@ public class OrderQueryProcess
             jNode.put("products", current.products.toString());
         }
 
-        return new Tuple2("add_item", jNode.toString());
+        return CommunicationFactory.createOutput("add_item", jNode.toString());
 
     }
 
@@ -160,7 +160,7 @@ public class OrderQueryProcess
             jNode.put("products", current.products.toString());
         }
 
-        return new Tuple2("remove_item", jNode.toString());
+        return CommunicationFactory.createOutput("remove_item", jNode.toString());
 
     }
 
@@ -178,7 +178,7 @@ public class OrderQueryProcess
             state.update(current);
         }
 
-        return new Tuple2("find_order", jNode.toString());
+        return CommunicationFactory.createOutput("find_order", jNode.toString());
 
     }
 
@@ -198,7 +198,7 @@ public class OrderQueryProcess
 
         }
 
-        return new Tuple2("remove_order", jNode.toString());
+        return CommunicationFactory.createOutput("remove_order", jNode.toString());
 
     }
 }

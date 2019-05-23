@@ -66,7 +66,7 @@ public class OrderJob {
 		DataStream<String> stream = env
 				.addSource(new FlinkKafkaConsumer011<>(inputTopic, new SimpleStringSchema(), properties));
 
-		FlinkKafkaProducer011<Tuple2<String, String>> flinkKafkaProducer = createProducer(
+		FlinkKafkaProducer011<Tuple2<String, String>> flinkKafkaProducer = CommunicationFactory.createProducer(
 				outputTopic, kafkaAddress);
 
 		// TODO: change "user_id" to a suitable value
@@ -77,28 +77,7 @@ public class OrderJob {
 		env.execute("User streaming job execution");
 	}
 
-	private static FlinkKafkaProducer011<Tuple2<String, String>> createProducer(
-			String topic, String kafkaAddress) {
 
-		return new FlinkKafkaProducer011<>(kafkaAddress,
-				topic, new KeyedSerializationSchema<Tuple2<String, String>>() {
-			@Override
-			public byte[] serializeKey(Tuple2<String, String> element) {
-				return null;
-			}
-
-			@Override
-			public byte[] serializeValue(Tuple2<String, String> element) {
-				return element.f1.getBytes();
-			}
-
-			@Override
-			public String getTargetTopic(Tuple2<String, String> element) {
-				System.out.println("Sending " + element.f1 + " to " + element.f0);
-				return element.f0;
-			}
-		});
-	}
 }
 
 
