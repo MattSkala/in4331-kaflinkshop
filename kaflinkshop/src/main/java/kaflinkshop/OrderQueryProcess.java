@@ -11,6 +11,10 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.Obje
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 
 public class OrderQueryProcess
         extends KeyedProcessFunction<Tuple, Tuple2<String, JsonNode>, Tuple2<String, String>> {
@@ -46,6 +50,20 @@ public class OrderQueryProcess
             case "orders/create":
                 output = CreateOrder(value_node, order_id);
                 break;
+            case "order/remove":
+                output = RemoveOrder(value_node);
+                break;
+            case "order/find":
+                output = FindOrder(value_node);
+                break;
+            case "order/addItem":
+                output = addItem(value_node);
+                break;
+            case "order/removeItem":
+                output = removeItem(value_node);
+                break;
+            case "order/checkout":
+                //Need multiple nodes
             default:
                 output = ErrorState(value_node);
         }
@@ -79,9 +97,9 @@ public class OrderQueryProcess
 
     private Tuple2<String, String> CreateOrder(JsonNode value_node, String order_id) throws Exception {
         OrderState current = new OrderState();
-        current.id = order_id;
+        current.order_id = order_id;
         ObjectNode jNode = (ObjectNode) value_node;
-        jNode.with("params").put("order_id", current.id);
+        jNode.with("params").put("order_id", current.order_id);
 
         // write the state back
         state.update(current);
@@ -95,5 +113,92 @@ public class OrderQueryProcess
         ObjectNode jNode = jsonParser.createObjectNode();
         jNode.put("request_id", input_node.get("request_id"));
         return jNode;
+    }
+
+    private Tuple2<String, String> addItem(JsonNode value_node) throws Exception {
+        ObjectNode jNode = CreateOutput(value_node);
+
+
+        JsonNode params = value_node.get("params");
+        String add_item = params.get("item").toString();
+        // retrieve the current count
+        OrderState current = state.value();
+
+        if (current == null) {
+            jNode.put("error", "Something went wrong!");
+        } else {
+            current.products[current.products.length] = add_item;
+            state.update(current);
+            jNode.put("message", "Added item");
+            jNode.put("result", "success");
+            jNode.put("products", current.products.toString());
+        }
+
+        return new Tuple2("add_item", jNode.toString());
+
+    }
+
+    private Tuple2<String, String> removeItem(JsonNode value_node) throws Exception {
+        ObjectNode jNode = CreateOutput(value_node);
+
+
+        JsonNode params = value_node.get("params");
+        String remove_item = params.get("item").toString();
+        // retrieve the current count
+        OrderState current = state.value();
+
+        if (current == null) {
+            jNode.put("error", "Something went wrong!");
+        } else {
+            //Not the best solution
+            List<String> list = new ArrayList<>(Arrays.asList(current.products));
+            list.remove(remove_item);
+            current.products = list.toArray(new String[0]);
+            state.update(current);
+            jNode.put("message", "Removed item");
+            jNode.put("result", "success");
+            jNode.put("products", current.products.toString());
+        }
+
+        return new Tuple2("remove_item", jNode.toString());
+
+    }
+
+    private Tuple2<String, String> FindOrder(JsonNode value_node) throws Exception {
+        ObjectNode jNode = CreateOutput(value_node);
+
+        // retrieve the current count
+        OrderState current = state.value();
+        if (current == null) {
+            jNode.put("error", "Something went wrong!");
+        } else {
+            jNode.put("order_id", current.order_id);
+            jNode.put("user_id", current.user_id);
+            jNode.put("products", current.products.toString());
+            state.update(current);
+        }
+
+        return new Tuple2("find_order", jNode.toString());
+
+    }
+
+    private Tuple2<String, String> RemoveOrder(JsonNode value_node) throws Exception {
+        ObjectNode jNode = CreateOutput(value_node);
+
+        // retrieve the current count
+        OrderState current = state.value();
+
+        if (current == null) {
+            jNode.put("result", "failure");
+            jNode.put("message", "Could not find this order");
+        } else {
+            state.update(null);
+            jNode.put("result", "success");
+            jNode.put("message", "Correctly deleted the order");
+
+        }
+
+        return new Tuple2("remove_order", jNode.toString());
+
     }
 }
