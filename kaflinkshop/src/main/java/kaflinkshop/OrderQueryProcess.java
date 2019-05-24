@@ -13,6 +13,7 @@ import org.apache.flink.util.Collector;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 
 
@@ -48,19 +49,19 @@ public class OrderQueryProcess
             case "orders/create":
                 output = CreateOrder(value_node, order_id);
                 break;
-            case "order/remove":
+            case "orders/remove":
                 output = RemoveOrder(value_node);
                 break;
-            case "order/find":
+            case "orders/find":
                 output = FindOrder(value_node);
                 break;
-            case "order/addItem":
+            case "orders/addItem":
                 output = addItem(value_node);
                 break;
-            case "order/removeItem":
+            case "orders/removeItem":
                 output = removeItem(value_node);
                 break;
-            case "order/checkout":
+            case "orders/checkout":
                 //Need multiple nodes
 
             default:
@@ -96,7 +97,10 @@ public class OrderQueryProcess
 
     private Tuple2<String, String> CreateOrder(JsonNode value_node, String order_id) throws Exception {
         OrderState current = new OrderState();
+        current.is_paid = false;
         current.order_id = order_id;
+        current.user_id = value_node.with("params").get("user_id").asText();
+        current.products = new HashMap<>();
         ObjectNode jNode = (ObjectNode) value_node;
         jNode.with("params").put("order_id", current.order_id);
 
@@ -117,23 +121,30 @@ public class OrderQueryProcess
     private Tuple2<String, String> addItem(JsonNode value_node) throws Exception {
         ObjectNode jNode = CreateOutput(value_node);
 
-
+        System.out.println(value_node.toString());
         JsonNode params = value_node.get("params");
-        String add_item = params.get("item").toString();
+        String add_item = params.get("item_id").toString();
         // retrieve the current count
         OrderState current = state.value();
 
         if (current == null) {
             jNode.put("error", "Something went wrong!");
         } else {
-            current.products[current.products.length] = add_item;
+            Integer current_items = current.products.get(add_item);
+
+            if(current_items == null){
+                current.products.put(add_item, 1);
+            } else {
+                current.products.put(add_item, current_items + 1);
+            }
+
             state.update(current);
             jNode.put("message", "Added item");
             jNode.put("result", "success");
             jNode.put("products", current.products.toString());
         }
 
-        return CommunicationFactory.createOutput("add_item", jNode.toString());
+        return CommunicationFactory.createOutput(CommunicationFactory.ORDER_OUT_TOPIC, jNode.toString());
 
     }
 
@@ -142,24 +153,32 @@ public class OrderQueryProcess
 
 
         JsonNode params = value_node.get("params");
-        String remove_item = params.get("item").toString();
+        String remove_item = params.get("item_id").toString();
         // retrieve the current count
         OrderState current = state.value();
 
         if (current == null) {
             jNode.put("error", "Something went wrong!");
         } else {
-            //Not the best solution
-            List<String> list = new ArrayList<>(Arrays.asList(current.products));
-            list.remove(remove_item);
-            current.products = list.toArray(new String[0]);
+
+            Integer current_items = current.products.get(remove_item);
+
+            if(current_items == null){
+                jNode.put("message", "This item was not in the order");
+            } else {
+                current.products.remove(remove_item);
+                jNode.put("message", "Removed item");
+                jNode.put("result", "success");
+                jNode.put("products", current.products.toString());
+            }
+
+            current.products.remove(remove_item);
+
             state.update(current);
-            jNode.put("message", "Removed item");
-            jNode.put("result", "success");
-            jNode.put("products", current.products.toString());
+
         }
 
-        return CommunicationFactory.createOutput("remove_item", jNode.toString());
+        return CommunicationFactory.createOutput(CommunicationFactory.ORDER_OUT_TOPIC, jNode.toString());
 
     }
 
@@ -173,11 +192,12 @@ public class OrderQueryProcess
         } else {
             jNode.put("order_id", current.order_id);
             jNode.put("user_id", current.user_id);
+            jNode.put("is_paid", current.is_paid);
             jNode.put("products", current.products.toString());
             state.update(current);
         }
 
-        return CommunicationFactory.createOutput("find_order", jNode.toString());
+        return CommunicationFactory.createOutput(CommunicationFactory.ORDER_OUT_TOPIC, jNode.toString());
 
     }
 
@@ -197,7 +217,7 @@ public class OrderQueryProcess
 
         }
 
-        return CommunicationFactory.createOutput("remove_order", jNode.toString());
+        return CommunicationFactory.createOutput(CommunicationFactory.ORDER_OUT_TOPIC, jNode.toString());
 
     }
 }

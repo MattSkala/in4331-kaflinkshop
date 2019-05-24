@@ -58,19 +58,17 @@ public class OrderJob {
 
 
 		String kafkaAddress = "localhost:9092";
-		String outputTopic = "order_out_api1";
-		String inputTopic = "order_in";
 		Properties properties = new Properties();
 		properties.setProperty("bootstrap.servers", kafkaAddress);
 		properties.setProperty("zookeeper.connect", "localhost:2181");
 		DataStream<String> stream = env
-				.addSource(new FlinkKafkaConsumer011<>(inputTopic, new SimpleStringSchema(), properties));
+				.addSource(new FlinkKafkaConsumer011<>(CommunicationFactory.ORDER_IN_TOPIC, new SimpleStringSchema(), properties));
 
 		FlinkKafkaProducer011<Tuple2<String, String>> flinkKafkaProducer = CommunicationFactory.createProducer(
-				outputTopic, kafkaAddress);
+				CommunicationFactory.ORDER_OUT_TOPIC, kafkaAddress);
 
 		// TODO: change "user_id" to a suitable value
-		stream.flatMap(new JsonParser("user_id")).keyBy(0).process(new OrderQueryProcess()).addSink(flinkKafkaProducer);
+		stream.flatMap(new JsonParser("order_id")).keyBy(0).process(new OrderQueryProcess()).addSink(flinkKafkaProducer);
 
 		stream.print();
 		// execute program
