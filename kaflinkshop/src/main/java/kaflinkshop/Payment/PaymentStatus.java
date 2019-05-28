@@ -1,4 +1,4 @@
-package kaflinkshop;
+package kaflinkshop.Payment;
 
 public enum PaymentStatus {
 
