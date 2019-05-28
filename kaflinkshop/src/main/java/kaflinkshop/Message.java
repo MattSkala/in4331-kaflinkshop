@@ -239,10 +239,10 @@ public class Message {
 		return new Message(input, state, params, path, result);
 	}
 
-	public static Message.PathPoint pathPointFromMessageState(Message message) {
+	public static Message.PathPoint pathPointFromMessageState(Message message, String serviceName) {
 		Message.PathPoint pathPoint = new Message.PathPoint();
 		pathPoint.params = message.params;
-		pathPoint.consumer = message.state.sender;
+		pathPoint.consumer = serviceName;
 		pathPoint.route = message.state.route;
 		pathPoint.state = message.state.state;
 		return pathPoint;
@@ -257,7 +257,7 @@ public class Message {
 	) {
 		Message message = original.deepCopy();
 
-		Message.PathPoint pathPoint = pathPointFromMessageState(message);
+		Message.PathPoint pathPoint = pathPointFromMessageState(message, serviceName);
 		message.path.add(pathPoint);
 
 		message.state.route = route;
@@ -280,7 +280,7 @@ public class Message {
 	) {
 		Message message = original.deepCopy();
 
-		Message.PathPoint pathPoint = pathPointFromMessageState(message);
+		Message.PathPoint pathPoint = pathPointFromMessageState(message, serviceName);
 		message.path.add(pathPoint);
 
 		message.state.route = "web";
