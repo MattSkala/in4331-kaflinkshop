@@ -55,7 +55,7 @@ public class SimpleJob<T> {
 		}
 	}
 
-	protected static class DynamicOutputTopicKeyedSerializationSchema implements KeyedSerializationSchema<Output> {
+	public static class DynamicOutputTopicKeyedSerializationSchema implements KeyedSerializationSchema<Output> {
 
 		public final String defaultOutputTopic;
 

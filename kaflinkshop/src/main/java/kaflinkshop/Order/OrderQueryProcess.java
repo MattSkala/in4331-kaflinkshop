@@ -28,6 +28,22 @@ public class OrderQueryProcess extends QueryProcess<String> {
 	}
 
 	@Override
+	public void processElement(Message message, Context context, Collector<Output> collector) throws Exception {
+		String route = message.state.route;
+
+		// HOWTO: send message to multiple services
+		if (route.equals("...")) {
+			// do custom things, like send two message (call `collector.collect(...)` twice)
+			collector.collect(new Output(
+					Message.redirect(message, CommunicationFactory.SERVICE_ORDER, "route/to/process", "validate-user", null),
+					CommunicationFactory.USER_IN_TOPIC
+			));
+		}
+
+		super.processElement(message, context, collector);
+	}
+
+	@Override
 	public QueryProcessResult processElement(Message message, Context context) throws Exception {
 		String orderID = context.getCurrentKey();
 		String route = message.state.route;
