@@ -15,39 +15,56 @@ The application requires Python >= 3.7 and Apache Kafka running on the port `909
 
 ## Request Format
 
-The server handles HTTP routes defined in the `app.router`. Each route handler constructs the request object and sends the request to a Kafka queue designated to the specific service. All messages in Kafka should be serialized using JSON. Messages sent from the server to input topics contain the following fields:
+The server handles HTTP routes defined in the `app.router`. Each route handler constructs the request object and sends the request to a Kafka queue designated to the specific service. All messages in Kafka should be serialized using JSON and follow the signature outlined below.
 
-name | type | description
---- | --- | ---
-`request_id` | `string` | A unique request ID that should also be included in the response
-`sink` | `string` | The Kafka topic into which the response should be sent
-`route` | `string` | The API route name
-`params` | `object?` | Request parameters
-
-Example:
-```
-{
-    "request_id": "4423f650-7a14-11e9-b9a4-80e6501cc886",
-    "sink": "user_out_api1",
-    "route": "users/find",
-    "params": {
-        "user_id": "1"
+```ts
+interface Message {
+	// input specifies message origin (from the web server)
+	input: {
+		request_id: string // e.g. "4423f650-7a14-11e9-b9a4-80e6501cc886"
+		consumer: string   // input kafka topic
+		route: string      // e.g. "users/find"
+		params: {}         // any key-value pair is valid
+	}
+	// param represents params relevant for the current processing stage
+	params?: {
+		user_id?: string   // example parameter
+        order_id?: string  // example parameter
+        item_id?: string   // example parameter
+		[key: string]: any // any key-value pair is valid
+	}
+	// state represent the current state of the message
+	// not quite sure about parameters of state yet, tho
+	state: {
+		route: string
+        sender: "web" | "user" | "order" | "stock" | "payment"
+		state?: string | null
     }
+    // the result is only present when sending a message back to the web server
+	result?: {
+		result: "success" | "failure" | "error"
+		message?: string | null
+		params: {}
+	}
+	// path describes what Flink processes the package has travelled through
+	path: [{
+		consumer: "web" | "user" | "order" | "stock" | "payment" // service to process the message
+		route: string         // route
+		state?: string | null // human-readable message
+		params: {}            // params that denote state at this point
+	}, {
+		consumer: "web" | "user" | "order" | "stock" | "payment" 
+		route: string
+		state: string
+		params: {}
+	}]
 }
 ```
+
+There is an abstraction level provided in the current Java implementation, which allows one to deal with messages. See the existing code for examples.
 
 ## Response Format
 
-The response from Flink should be sent to the Kafka topic specified in the `sink` field. The response message should contain the `request_id` field matching the value in the request message, and any other fields that should be returned in the HTTP response.
-
-Example:
-
-```
-{
-    "request_id": "4423f650-7a14-11e9-b9a4-80e6501cc886",  
-    "user_id": "1",
-    "credit": 1000000
-}
-```
+The response from Flink should also be a message as defined above. The response message should contain the `input.request_id` field matching the value in the request message. The current level of abstraction takes care of this by default. 
 
 If the server does not receive the expected message in the sink within a specified timeout, the HTTP request fails.
