@@ -12,6 +12,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static kaflinkshop.CommunicationFactory.*;
+import static kaflinkshop.Payment.PaymentQueryProcess.*;
 
 public class OrderQueryProcess extends QueryProcess {
 
@@ -63,11 +64,60 @@ public class OrderQueryProcess extends QueryProcess {
 			case "orders/checkout":
 				result = checkoutOrder();
 				break;
+
+			// Payment logic
+			case "payment/pay":
+				return paymentPay(message);
+
+			// Error route handler
 			default:
 				throw new ServiceException.IllegalRouteException();
 		}
 
 		return Collections.singletonList(result);
+	}
+
+	private List<QueryProcessResult> paymentPay(Message message) throws Exception {
+		OrderState current = state.value();
+
+		if (message.state.state == null)
+			throw new ServiceException.IllegalStateException(null);
+
+		if (message.state.state.equals(STATE_PAYMENT_ORDER_VALIDATE)) {
+			if (current == null)
+				return Collections.singletonList(
+						new QueryProcessResult.Redirect(
+								PAYMENT_IN_TOPIC,
+								message.state.route,
+								message.params,
+								STATE_PAYMENT_ORDER_NOT_EXISTS));
+
+			// TODO: check if all items exist?
+			long price = current.countTotalItems();
+
+			ObjectNode params = message.params.deepCopy();
+			params.put(PARAM_USER_ID, current.userID);
+			params.put(PARAM_PRICE, price);
+
+			return Collections.singletonList(
+					new QueryProcessResult.Redirect(
+							PAYMENT_IN_TOPIC,
+							message.state.route,
+							params,
+							STATE_PAYMENT_ORDER_EXISTS));
+		}
+
+		if (message.state.state.equals(STATE_PAYMENT_ORDER_MARK_PAID)) {
+			if (current == null)
+				throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
+
+			current.isPaid = true;
+			state.update(current);
+
+			return Collections.emptyList(); // no response needed - if this fails, well, it fails
+		}
+
+		throw new ServiceException.IllegalStateException(message.state.state);
 	}
 
 	private QueryProcessResult findOrder() throws Exception {
@@ -99,24 +149,23 @@ public class OrderQueryProcess extends QueryProcess {
 					newParams,
 					"order-create-check-user");
 
-		} else { // update existing order
-
-			if (message.state.state == null)
-				throw new ServiceException("Order already exists.");
-
-			if (message.state.state.equals(STATE_USER_ORDER_ADDED)) {
-				current.userChecked = true;
-				state.update(current);
-				return successResult(current, "Order created.");
-			}
-
-			if (message.state.state.equals(STATE_USER_NOT_EXISTS)) {
-				state.update(null);
-				return failureResult(current, "Order not created. User did not exist.");
-			}
-
-			throw new ServiceException.IllegalStateException(message.state.state);
 		}
+
+		if (message.state.state == null)
+			throw new ServiceException("Order already exists.");
+
+		if (message.state.state.equals(STATE_USER_ORDER_ADDED)) {
+			current.userChecked = true;
+			state.update(current);
+			return successResult(current, "Order created.");
+		}
+
+		if (message.state.state.equals(STATE_USER_NOT_EXISTS)) {
+			state.update(null);
+			return failureResult(current, "Order not created. User did not exist.");
+		}
+
+		throw new ServiceException.IllegalStateException(message.state.state);
 	}
 
 	private QueryProcessResult removeOrder(Message message) throws Exception {
@@ -124,6 +173,9 @@ public class OrderQueryProcess extends QueryProcess {
 
 		if (current == null)
 			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
+
+		if (current.isPaid)
+			throw new ServiceException("Cannot remove order that has already been paid.");
 
 		if (message.state.state == null) { // initiate order removal process
 			ObjectNode newParams = message.params.deepCopy();
@@ -151,6 +203,9 @@ public class OrderQueryProcess extends QueryProcess {
 
 		if (current == null)
 			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
+
+		if (current.isPaid)
+			throw new ServiceException("Cannot modify an order that has already been paid.");
 
 		if (message.state.state == null) {
 			// initiate item the process of adding an item
@@ -184,6 +239,9 @@ public class OrderQueryProcess extends QueryProcess {
 
 		if (current == null)
 			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
+
+		if (current.isPaid)
+			throw new ServiceException("Cannot modify an order that has already been paid.");
 
 		Integer value = current.products.remove(itemID);
 		state.update(current);

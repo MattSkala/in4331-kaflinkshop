@@ -5,6 +5,7 @@ import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ObjectNode;
 
 import javax.annotation.Nullable;
 import java.util.Collections;
@@ -12,6 +13,7 @@ import java.util.List;
 
 import static kaflinkshop.CommunicationFactory.*;
 import static kaflinkshop.Order.OrderQueryProcess.*;
+import static kaflinkshop.Payment.PaymentQueryProcess.*;
 
 public class UserQueryProcess extends QueryProcess {
 
@@ -67,12 +69,52 @@ public class UserQueryProcess extends QueryProcess {
 				result = removeOrder(message);
 				break;
 
+			// Payment logic
+			case "payment/pay":
+				result = paymentPay(message);
+				break;
+
 			// Error route handler
 			default:
 				throw new ServiceException.IllegalRouteException();
 		}
 
 		return Collections.singletonList(result);
+	}
+
+	private QueryProcessResult paymentPay(Message message) throws Exception {
+		UserState current = state.value();
+
+		if (current == null)
+			return new QueryProcessResult.Redirect(
+					PAYMENT_IN_TOPIC,
+					message.state.route,
+					message.params,
+					STATE_PAYMENT_USER_NOT_EXISTS);
+
+		long price = message.params.get(PARAM_PRICE).asLong();
+		if (price < 0)
+			throw new ServiceException("Price cannot be negative.");
+
+		if (current.credits >= price) {
+			current.credits -= price;
+			state.update(current);
+			ObjectNode params = message.params.deepCopy();
+			params.put("user_credits", current.credits);
+			return new QueryProcessResult.Redirect(
+					PAYMENT_IN_TOPIC,
+					message.state.route,
+					params,
+					STATE_PAYMENT_USER_CREDITS_SUBTRACTED);
+		} else {
+			ObjectNode params = message.params.deepCopy();
+			params.put("user_credits", current.credits);
+			return new QueryProcessResult.Redirect(
+					PAYMENT_IN_TOPIC,
+					message.state.route,
+					params,
+					STATE_PAYMENT_USER_NO_CREDITS);
+		}
 	}
 
 	private QueryProcessResult removeOrder(Message message) throws Exception {

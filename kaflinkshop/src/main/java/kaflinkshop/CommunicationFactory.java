@@ -24,6 +24,7 @@ public class CommunicationFactory {
 	public final static String PARAM_ITEM_ID = "item_id";
 	public final static String PARAM_ORDER_ID = "order_id";
 	public final static String PARAM_AMOUNT = "amount";
+	public final static String PARAM_PRICE = "price";
 
 	public final static String KAFKA_DEFAULT_ADDRESS = "localhost:9092";
 	public final static String ZOOKEEPER_DEFAULT_ADDRESS = "localhost:2181";

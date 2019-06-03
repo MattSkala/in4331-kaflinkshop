@@ -11,7 +11,6 @@ public class OrderState {
 	public String orderID;
 	public String userID;
 	public HashMap<String, Integer> products;
-	public long lastModified;
 	public boolean userChecked;
 	public boolean isPaid;
 
@@ -33,11 +32,17 @@ public class OrderState {
 		node.put("order_id", this.orderID);
 		node.put("user_id", this.userID);
 		node.put("user_checked", this.userChecked);
-		node.put("last_modified", this.lastModified);
 		node.put("is_paid", this.isPaid);
 		node.set("products", products);
 
 		return node;
+	}
+
+	public long countTotalItems() {
+		long amount = 0;
+		for (Integer qty : products.values())
+			amount += qty;
+		return amount;
 	}
 
 }
