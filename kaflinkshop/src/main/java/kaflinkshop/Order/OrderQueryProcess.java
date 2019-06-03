@@ -8,8 +8,10 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMap
 import org.apache.flink.util.Collector;
 
 import javax.annotation.Nullable;
+import java.util.Collections;
+import java.util.List;
 
-public class OrderQueryProcess extends QueryProcess<String> {
+public class OrderQueryProcess extends QueryProcess {
 
 	/**
 	 * The state that is maintained by this process function.
@@ -23,7 +25,7 @@ public class OrderQueryProcess extends QueryProcess<String> {
 	}
 
 	@Override
-	public void open(Configuration parameters) throws Exception {
+	public void open(Configuration parameters) {
 		state = getRuntimeContext().getState(new ValueStateDescriptor<>("order_state", OrderState.class));
 	}
 
@@ -44,7 +46,7 @@ public class OrderQueryProcess extends QueryProcess<String> {
 	}
 
 	@Override
-	public QueryProcessResult processElement(Message message, Context context) throws Exception {
+	public List<QueryProcessResult> processElement(Message message, Context context) throws Exception {
 		String orderID = context.getCurrentKey();
 		String route = message.state.route;
 		QueryProcessResult result;
@@ -72,7 +74,7 @@ public class OrderQueryProcess extends QueryProcess<String> {
 				throw new ServiceException.IllegalRouteException();
 		}
 
-		return result;
+		return Collections.singletonList(result);
 	}
 
 	private QueryProcessResult findOrder() throws Exception {

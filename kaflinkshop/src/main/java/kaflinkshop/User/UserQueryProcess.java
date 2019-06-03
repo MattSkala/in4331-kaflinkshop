@@ -5,11 +5,12 @@ import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ObjectNode;
 
 import javax.annotation.Nullable;
+import java.util.Collections;
+import java.util.List;
 
-public class UserQueryProcess extends QueryProcess<String> {
+public class UserQueryProcess extends QueryProcess {
 
 	/**
 	 * The state that is maintained by this process function.
@@ -28,7 +29,7 @@ public class UserQueryProcess extends QueryProcess<String> {
 	}
 
 	@Override
-	public QueryProcessResult processElement(Message message, Context context) throws Exception {
+	public List<QueryProcessResult> processElement(Message message, Context context) throws Exception {
 		String userID = context.getCurrentKey();
 		String route = message.state.route;
 		QueryProcessResult result;
@@ -56,7 +57,7 @@ public class UserQueryProcess extends QueryProcess<String> {
 				throw new ServiceException.IllegalRouteException();
 		}
 
-		return result;
+		return Collections.singletonList(result);
 	}
 
 	private QueryProcessResult findUser() throws Exception {

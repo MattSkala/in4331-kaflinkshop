@@ -28,13 +28,13 @@ import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer011;
 
 public class CustomOrderJob {
 
-	public static void main(String[] args) throws Exception {
+	public static void main(String[] args) {
 		// define job params
-		JobParams<String> params = new JobParams<>();
+		JobParams params = new JobParams();
 		params.kafkaAddress = CommunicationFactory.KAFKA_DEFAULT_ADDRESS;
 		params.inputTopic = CommunicationFactory.ORDER_IN_TOPIC;
 		params.defaultOutputTopic = CommunicationFactory.ORDER_OUT_TOPIC;
-		params.keySelector = new MessageKeySelector("order_id");
+		params.keyExtractor = new SimpleMessageKeyExtractor("order_id");
 		params.processFunction = new OrderQueryProcess();
 		params.attachDefaultProperties(CommunicationFactory.ZOOKEEPER_DEFAULT_ADDRESS);
 
@@ -56,8 +56,10 @@ public class CustomOrderJob {
 		DataStream<String> stream = environment.addSource(new FlinkKafkaConsumer011<>(params.inputTopic, new SimpleStringSchema(), params.properties));
 		stream.print();
 
-		KeyedStream<Message, String> keyedStream = stream.flatMap(messageParser)
-				.keyBy(params.keySelector);
+		KeyedStream<Message, String> keyedStream = stream
+				.flatMap(messageParser)
+				.flatMap(params.keyExtractor)
+				.keyBy(new MessageKeySelector());
 
 		/*
 		 * HOWTO: here you've got access to the stream. Feel free to process is the way you like.

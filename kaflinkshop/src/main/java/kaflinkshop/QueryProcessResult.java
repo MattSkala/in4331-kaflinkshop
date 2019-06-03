@@ -11,9 +11,9 @@ import java.util.Objects;
  */
 public interface QueryProcessResult {
 
-	public abstract Output createOutput(Message original, String serviceName);
+	Output createOutput(Message original, String serviceName);
 
-	public static class Redirect implements QueryProcessResult {
+	class Redirect implements QueryProcessResult {
 		public String topic;
 		public String route;
 		public JsonNode params;
@@ -39,7 +39,7 @@ public interface QueryProcessResult {
 		}
 	}
 
-	public static class Success implements QueryProcessResult {
+	class Success implements QueryProcessResult {
 		public JsonNode params;
 		public String message;
 
@@ -65,7 +65,7 @@ public interface QueryProcessResult {
 		}
 	}
 
-	public static class Failure implements QueryProcessResult {
+	class Failure implements QueryProcessResult {
 
 		public JsonNode params;
 		public String message;

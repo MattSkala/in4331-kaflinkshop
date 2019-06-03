@@ -1,25 +1,24 @@
 package kaflinkshop;
 
-import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 
 import java.util.Objects;
 import java.util.Properties;
 import java.util.stream.Stream;
 
-public class JobParams<T> {
+public class JobParams {
 
 	public String kafkaAddress;
 	public String inputTopic;
 	public String defaultOutputTopic;
 	public Properties properties;
-	public KeySelector<Message, T> keySelector;
-	public KeyedProcessFunction<T, Message, Output> processFunction;
+	public MessageKeyExtractor keyExtractor;
+	public KeyedProcessFunction<String, Message, Output> processFunction;
 
 	public void attachDefaultProperties(String bootstrapServers, String zookeeperConnect) {
 		this.properties = new Properties();
 		this.properties.setProperty("bootstrap.servers", bootstrapServers);
-		this.properties.setProperty("zookeeper.connect", "localhost:2181");
+		this.properties.setProperty("zookeeper.connect", zookeeperConnect);
 	}
 
 	public void attachDefaultProperties(String zookeeperConnect) {
@@ -27,7 +26,7 @@ public class JobParams<T> {
 			throw new IllegalStateException("kafkaAddress must be given or specified.");
 		this.properties = new Properties();
 		this.properties.setProperty("bootstrap.servers", this.kafkaAddress);
-		this.properties.setProperty("zookeeper.connect", "localhost:2181");
+		this.properties.setProperty("zookeeper.connect", zookeeperConnect);
 	}
 
 	public boolean isValid() {
@@ -36,7 +35,7 @@ public class JobParams<T> {
 				inputTopic,
 				properties,
 				defaultOutputTopic,
-				keySelector,
+				keyExtractor,
 				processFunction)
 				.allMatch(Objects::nonNull);
 	}

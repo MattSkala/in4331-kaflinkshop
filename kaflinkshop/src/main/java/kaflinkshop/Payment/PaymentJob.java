@@ -20,28 +20,20 @@ package kaflinkshop.Payment;
 
 import kaflinkshop.CommunicationFactory;
 import kaflinkshop.JobParams;
-import kaflinkshop.MessageKeySelector;
 import kaflinkshop.SimpleJob;
-import kaflinkshop.Stock.StockQueryProcess;
-import org.apache.flink.api.common.serialization.SimpleStringSchema;
-import org.apache.flink.streaming.api.datastream.DataStream;
-import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer011;
-import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer011;
-
-import java.util.Properties;
+import kaflinkshop.SimpleMessageKeyExtractor;
 
 public class PaymentJob {
-	public static void main(String[] args) throws Exception {
-		JobParams<String> params = new JobParams<>();
+	public static void main(String[] args) {
+		JobParams params = new JobParams();
 		params.kafkaAddress = CommunicationFactory.KAFKA_DEFAULT_ADDRESS;
 		params.inputTopic = CommunicationFactory.PAYMENT_IN_TOPIC;
 		params.defaultOutputTopic = CommunicationFactory.PAYMENT_OUT_TOPIC;
-		params.keySelector = new MessageKeySelector("order_id");
+		params.keyExtractor = new SimpleMessageKeyExtractor("order_id");
 		params.processFunction = new PaymentQueryProcess();
 		params.attachDefaultProperties(CommunicationFactory.ZOOKEEPER_DEFAULT_ADDRESS);
 
-		SimpleJob<String> job = new SimpleJob<>(params);
+		SimpleJob job = new SimpleJob(params);
 		job.execute();
 	}
 }

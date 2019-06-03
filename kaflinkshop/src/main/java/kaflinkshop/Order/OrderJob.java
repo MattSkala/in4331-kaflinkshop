@@ -20,20 +20,20 @@ package kaflinkshop.Order;
 
 import kaflinkshop.CommunicationFactory;
 import kaflinkshop.JobParams;
-import kaflinkshop.MessageKeySelector;
 import kaflinkshop.SimpleJob;
+import kaflinkshop.SimpleMessageKeyExtractor;
 
 public class OrderJob {
-	public static void main(String[] args) throws Exception {
-		JobParams<String> params = new JobParams<>();
+	public static void main(String[] args) {
+		JobParams params = new JobParams();
 		params.kafkaAddress = CommunicationFactory.KAFKA_DEFAULT_ADDRESS;
 		params.inputTopic = CommunicationFactory.ORDER_IN_TOPIC;
 		params.defaultOutputTopic = CommunicationFactory.ORDER_OUT_TOPIC;
-		params.keySelector = new MessageKeySelector("order_id");
+		params.keyExtractor = new SimpleMessageKeyExtractor("order_id");
 		params.processFunction = new OrderQueryProcess();
 		params.attachDefaultProperties(CommunicationFactory.ZOOKEEPER_DEFAULT_ADDRESS);
 
-		SimpleJob<String> job = new SimpleJob<>(params);
+		SimpleJob job = new SimpleJob(params);
 		job.execute();
 	}
 }

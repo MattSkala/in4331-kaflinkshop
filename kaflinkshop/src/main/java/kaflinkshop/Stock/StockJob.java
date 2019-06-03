@@ -20,20 +20,20 @@ package kaflinkshop.Stock;
 
 import kaflinkshop.CommunicationFactory;
 import kaflinkshop.JobParams;
-import kaflinkshop.MessageKeySelector;
 import kaflinkshop.SimpleJob;
+import kaflinkshop.SimpleMessageKeyExtractor;
 
 public class StockJob {
-	public static void main(String[] args) throws Exception {
-		JobParams<String> params = new JobParams<>();
+	public static void main(String[] args) {
+		JobParams params = new JobParams();
 		params.kafkaAddress = CommunicationFactory.KAFKA_DEFAULT_ADDRESS;
 		params.inputTopic = CommunicationFactory.STOCK_IN_TOPIC;
 		params.defaultOutputTopic = CommunicationFactory.STOCK_OUT_TOPIC;
-		params.keySelector = new MessageKeySelector("item_id");
+		params.keyExtractor = new SimpleMessageKeyExtractor("item_id");
 		params.processFunction = new StockQueryProcess();
 		params.attachDefaultProperties(CommunicationFactory.ZOOKEEPER_DEFAULT_ADDRESS);
 
-		SimpleJob<String> job = new SimpleJob<>(params);
+		SimpleJob job = new SimpleJob(params);
 		job.execute();
 	}
 }

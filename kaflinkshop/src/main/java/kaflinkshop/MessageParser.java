@@ -1,19 +1,15 @@
 package kaflinkshop;
 
 import org.apache.flink.api.common.functions.FlatMapFunction;
-import org.apache.flink.api.java.tuple.Tuple2;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.util.Collector;
 
-import java.util.UUID;
-
 /**
- * Parses JSON to a {@link Message} object.
+ * Parses JSON to a {@link Message} object and sets the state ID.
  */
 public class MessageParser implements FlatMapFunction<String, Message> {
 
 	@Override
-	public void flatMap(String input, Collector<Message> collector) throws Exception {
+	public void flatMap(String input, Collector<Message> collector) {
 		try {
 			Message message = Message.parse(input);
 			collector.collect(message);

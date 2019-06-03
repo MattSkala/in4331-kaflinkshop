@@ -1,6 +1,7 @@
 package kaflinkshop;
 
 public class CommunicationFactory {
+
 	public final static String API_VERSION = "api1";
 
 	public final static String USER_OUT_TOPIC = "user_out_" + API_VERSION;

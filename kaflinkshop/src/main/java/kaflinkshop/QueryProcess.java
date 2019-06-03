@@ -3,12 +3,12 @@ package kaflinkshop;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
 
+import java.util.List;
+
 /**
  * Provides an abstract wrapper for simpler implementation of base services.
- *
- * @param <T> Key type.
  */
-public abstract class QueryProcess<T> extends KeyedProcessFunction<T, Message, Output> {
+public abstract class QueryProcess extends KeyedProcessFunction<String, Message, Output> {
 
 	public final String serviceName;
 
@@ -18,20 +18,21 @@ public abstract class QueryProcess<T> extends KeyedProcessFunction<T, Message, O
 
 	@Override
 	public void processElement(Message message, Context context, Collector<Output> collector) throws Exception {
-		Output output;
-
 		try {
-			QueryProcessResult result = this.processElement(message, context);
-			output = result.createOutput(message, this.serviceName);
+			List<QueryProcessResult> results = this.processElement(message, context);
+			for (QueryProcessResult result : results) {
+				Output output = result.createOutput(message, this.serviceName);
+				collector.collect(output);
+			}
 		} catch (ServiceException e) {
-			output = new Output(Message.error(message, this.serviceName, e));
+			Output output = new Output(Message.error(message, this.serviceName, e));
+			collector.collect(output);
 		} catch (Exception e) {
-			output = new Output(Message.error(message, this.serviceName, e));
+			Output output = new Output(Message.error(message, this.serviceName, e));
+			collector.collect(output);
 		}
-
-		collector.collect(output);
 	}
 
-	abstract public QueryProcessResult processElement(Message message, Context context) throws Exception;
+	abstract public List<QueryProcessResult> processElement(Message message, Context context) throws Exception;
 
 }

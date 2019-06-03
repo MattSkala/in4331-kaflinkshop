@@ -26,6 +26,8 @@ public class Message {
 		public String sender;
 		@Nullable
 		public String state;
+		@Nullable
+		public String state_id;
 	}
 
 	public static class PathPoint {
@@ -33,6 +35,8 @@ public class Message {
 		public String route;
 		@Nullable
 		public String state;
+		@Nullable
+		public String state_id;
 		@Nullable
 		public JsonNode params;
 	}
@@ -90,6 +94,7 @@ public class Message {
 			state.put("route", this.state.route);
 			state.put("sender", this.state.sender);
 			state.put("state", this.state.state);
+			state.put("state_id", this.state.state_id);
 		}
 
 		if (this.result != null) {
@@ -103,6 +108,7 @@ public class Message {
 			node.put("consumer", pathPoint.consumer);
 			node.put("route", pathPoint.consumer);
 			node.put("state", pathPoint.state);
+			node.put("state_id", pathPoint.state_id);
 			node.set("params", pathPoint.params);
 			path.add(node);
 		}
@@ -122,7 +128,7 @@ public class Message {
 
 	private static @Nullable
 	String toString(JsonNode node) {
-		if (node.isNull())
+		if (node == null || node.isNull())
 			return null;
 		else
 			return node.asText();
@@ -152,6 +158,7 @@ public class Message {
 				state.route = toString(nodeState.get("route"));
 				state.sender = toString(nodeState.get("sender"));
 				state.state = toString(nodeState.get("state"));
+				state.state_id = toString(nodeState.get("state_id"));
 			}
 
 			Result result = null;
@@ -170,6 +177,7 @@ public class Message {
 					pathPoint.consumer = toString(nodePathPoint.get("consumer"));
 					pathPoint.route = toString(nodePathPoint.get("route"));
 					pathPoint.state = toString(nodePathPoint.get("state"));
+					pathPoint.state_id = toString(nodePathPoint.get("state_id"));
 					pathPoint.params = nodePathPoint.get("params");
 					path.add(pathPoint);
 				});
@@ -211,6 +219,7 @@ public class Message {
 			state.state = this.state.state;
 			state.sender = this.state.sender;
 			state.route = this.state.route;
+			state.state_id = this.state.state_id;
 		}
 
 		Result result = null;
@@ -225,6 +234,7 @@ public class Message {
 		for (PathPoint pp : this.path) {
 			PathPoint pathPoint = new PathPoint();
 			pathPoint.state = pp.state;
+			pathPoint.state_id = pp.state_id;
 			pathPoint.route = pp.route;
 			pathPoint.consumer = pp.consumer;
 			pathPoint.params = pp.params.deepCopy();
@@ -245,6 +255,7 @@ public class Message {
 		pathPoint.consumer = serviceName;
 		pathPoint.route = message.state.route;
 		pathPoint.state = message.state.state;
+		pathPoint.state_id = message.state.state_id;
 		return pathPoint;
 	}
 
@@ -263,6 +274,7 @@ public class Message {
 		message.state.route = route;
 		message.state.sender = serviceName;
 		message.state.state = state;
+		message.state.state_id = null;
 
 		message.params = params;
 
@@ -286,6 +298,7 @@ public class Message {
 		message.state.route = "web";
 		message.state.sender = serviceName;
 		message.state.state = null;
+		message.state.state_id = null;
 
 		message.params = null;
 

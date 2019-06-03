@@ -9,14 +9,12 @@ import org.apache.flink.streaming.util.serialization.KeyedSerializationSchema;
 
 /**
  * Represents basic job implementation.
- *
- * @param <T> key type
  */
-public class SimpleJob<T> {
+public class SimpleJob {
 
-	public final JobParams<T> params;
+	public final JobParams params;
 
-	public SimpleJob(JobParams<T> params) {
+	public SimpleJob(JobParams params) {
 		this.params = params;
 	}
 
@@ -40,7 +38,8 @@ public class SimpleJob<T> {
 		stream.print();
 
 		stream.flatMap(messageParser)
-				.keyBy(params.keySelector)
+				.flatMap(params.keyExtractor)
+				.keyBy(new MessageKeySelector())
 				.process(params.processFunction)
 				.addSink(producer);
 
