@@ -26,6 +26,7 @@ public interface QueryProcessResult {
 			this.route = route;
 			this.params = params;
 			this.state = state;
+			this.topic = topic;
 		}
 
 		public Redirect(@Nonnull String topic, @Nonnull String route, @Nonnull JsonNode params) {

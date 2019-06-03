@@ -227,7 +227,9 @@ public class Message {
 			result = new Result();
 			result.result = this.result.result;
 			result.message = this.result.message;
-			result.params = this.result.params.deepCopy();
+			if(this.result.params != null) {
+				result.params = this.result.params.deepCopy();
+			}
 		}
 
 		ArrayList<PathPoint> path = new ArrayList<>(this.path.size());

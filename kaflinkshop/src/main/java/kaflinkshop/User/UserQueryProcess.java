@@ -53,11 +53,41 @@ public class UserQueryProcess extends QueryProcess {
 			case "users/credit/subtract":
 				result = subtractCredits(message);
 				break;
+
+//			Order logic
+			case "orders/create":
+				result = createOrder(message);
+				break;
+			case "orders/remove":
+				result = removeOrder(message);
+				break;
 			default:
 				throw new ServiceException.IllegalRouteException();
 		}
 
 		return Collections.singletonList(result);
+	}
+
+	private QueryProcessResult removeOrder(Message message) throws Exception{
+		UserState current = state.value();
+
+		if (current == null)
+			return new QueryProcessResult.Redirect(CommunicationFactory.ORDER_IN_TOPIC, message.state.route, message.params, "no-user");
+
+		current.orders.remove(message.params.get("order_id").asText());
+
+		return new QueryProcessResult.Redirect(CommunicationFactory.ORDER_IN_TOPIC, message.state.route, message.params, "removed-from-user");
+	}
+
+	private QueryProcessResult createOrder(Message message) throws Exception{
+		UserState current = state.value();
+
+		if (current == null)
+			return new QueryProcessResult.Redirect(CommunicationFactory.ORDER_IN_TOPIC, message.state.route, message.params, "no-user");
+
+		current.orders.add(message.params.get("order_id").asText());
+
+		return new QueryProcessResult.Redirect(CommunicationFactory.ORDER_IN_TOPIC, message.state.route, message.params, "confirmed-user");
 	}
 
 	private QueryProcessResult findUser() throws Exception {
@@ -138,6 +168,10 @@ public class UserQueryProcess extends QueryProcess {
 
 	private QueryProcessResult successResult(UserState state, @Nullable String msg) {
 		return new QueryProcessResult.Success(state.toJsonNode(this.objectMapper), msg);
+	}
+
+	private QueryProcessResult failureResult(UserState state, @Nullable String msg) {
+		return new QueryProcessResult.Failure(state.toJsonNode(this.objectMapper), msg);
 	}
 
 }

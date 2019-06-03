@@ -4,7 +4,9 @@ import kaflinkshop.*;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.flink.util.Collector;
 
 import javax.annotation.Nullable;
@@ -59,7 +61,7 @@ public class OrderQueryProcess extends QueryProcess {
 				result = createOrder(orderID, message);
 				break;
 			case "orders/remove":
-				result = removeOrder();
+				result = removeOrder(message);
 				break;
 			case "orders/addItem":
 				result = addItem(message);
@@ -89,6 +91,21 @@ public class OrderQueryProcess extends QueryProcess {
 	private QueryProcessResult createOrder(String orderID, Message message) throws Exception {
 		OrderState current = state.value();
 		String userID = message.params.get("user_id").asText();
+		System.out.println(message.state.state);
+
+		if(message.state.state != null && message.state.state.equals("confirmed-user")){
+			current.userChecked = true;
+			state.update(current);
+
+			return successResult(current, "Order created.");
+		}
+
+
+		if(message.state.state != null && message.state.state.equals("no-user")){
+			state.update(null);
+
+			return successResult(current, "Order not created. User did not exist.");
+		}
 
 		if (current != null)
 			throw new ServiceException("Order already exists.");
@@ -96,20 +113,32 @@ public class OrderQueryProcess extends QueryProcess {
 		current = new OrderState(orderID, userID);
 		state.update(current);
 
-		// TODO: check if the user exists
+		ObjectNode newParams = message.params.deepCopy();
+		newParams.put("order_id", orderID);
 
-		return successResult(current, "TODO: CHECK IF USER EXISTS");
+
+		// Set some timer!
+		return new QueryProcessResult.Redirect(CommunicationFactory.USER_IN_TOPIC, message.state.route,  newParams, "order-create-check-user");
 	}
 
-	private QueryProcessResult removeOrder() throws Exception {
+	private QueryProcessResult removeOrder(Message message) throws Exception {
 		OrderState current = state.value();
 
 		if (current == null)
 			throw new ServiceException.EntryNotFoundException("order");
 
-		state.update(null);
+		if(message.state.state != null){
+			state.update(null);
+			return new QueryProcessResult.Success("Order removed.");
+		}
 
-		return new QueryProcessResult.Success("Order removed.");
+		// Set some timer!
+
+		ObjectNode newParams = message.params.deepCopy();
+		newParams.put("order_id", current.orderID);
+		newParams.put("user_id", current.userID);
+
+		return new QueryProcessResult.Redirect(CommunicationFactory.USER_IN_TOPIC, message.state.route, newParams, "check-remove");
 	}
 
 	private QueryProcessResult addItem(Message message) throws Exception {
