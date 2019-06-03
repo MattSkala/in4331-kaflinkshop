@@ -29,7 +29,7 @@ public class PaymentJob {
 		params.kafkaAddress = CommunicationFactory.KAFKA_DEFAULT_ADDRESS;
 		params.inputTopic = CommunicationFactory.PAYMENT_IN_TOPIC;
 		params.defaultOutputTopic = CommunicationFactory.PAYMENT_OUT_TOPIC;
-		params.keyExtractor = new SimpleMessageKeyExtractor("order_id");
+		params.keyExtractor = new SimpleMessageKeyExtractor(CommunicationFactory.PARAM_ORDER_ID);
 		params.processFunction = new PaymentQueryProcess();
 		params.attachDefaultProperties(CommunicationFactory.ZOOKEEPER_DEFAULT_ADDRESS);
 

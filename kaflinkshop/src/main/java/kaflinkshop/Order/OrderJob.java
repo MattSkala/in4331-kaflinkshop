@@ -29,7 +29,7 @@ public class OrderJob {
 		params.kafkaAddress = CommunicationFactory.KAFKA_DEFAULT_ADDRESS;
 		params.inputTopic = CommunicationFactory.ORDER_IN_TOPIC;
 		params.defaultOutputTopic = CommunicationFactory.ORDER_OUT_TOPIC;
-		params.keyExtractor = new SimpleMessageKeyExtractor("order_id");
+		params.keyExtractor = new SimpleMessageKeyExtractor(CommunicationFactory.PARAM_ORDER_ID);
 		params.processFunction = new OrderQueryProcess();
 		params.attachDefaultProperties(CommunicationFactory.ZOOKEEPER_DEFAULT_ADDRESS);
 

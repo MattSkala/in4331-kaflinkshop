@@ -10,7 +10,15 @@ import javax.annotation.Nullable;
 import java.util.Collections;
 import java.util.List;
 
+import static kaflinkshop.CommunicationFactory.ORDER_IN_TOPIC;
+import static kaflinkshop.CommunicationFactory.PARAM_AMOUNT;
+import static kaflinkshop.Order.OrderQueryProcess.STATE_ITEM_EXISTS;
+import static kaflinkshop.Order.OrderQueryProcess.STATE_ITEM_NOT_EXISTS;
+
+
 public class StockQueryProcess extends QueryProcess {
+
+	public static final String ENTITY_NAME = "stock_item";
 
 	/**
 	 * The state that is maintained by this process function.
@@ -47,6 +55,13 @@ public class StockQueryProcess extends QueryProcess {
 			case "stock/subtract":
 				result = itemSubtract(message);
 				break;
+
+			// Order logic
+			case "orders/addItem":
+				result = orderAddItem(message);
+				break;
+
+			// Error route handler
 			default:
 				throw new ServiceException.IllegalRouteException();
 		}
@@ -54,11 +69,28 @@ public class StockQueryProcess extends QueryProcess {
 		return Collections.singletonList(result);
 	}
 
+	private QueryProcessResult orderAddItem(Message message) throws Exception {
+		StockState current = state.value();
+
+		if (current == null)
+			return new QueryProcessResult.Redirect(
+					ORDER_IN_TOPIC,
+					message.state.route,
+					message.params,
+					STATE_ITEM_NOT_EXISTS);
+
+		return new QueryProcessResult.Redirect(
+				ORDER_IN_TOPIC,
+				message.state.route,
+				message.params,
+				STATE_ITEM_EXISTS);
+	}
+
 	private QueryProcessResult itemAvailability() throws Exception {
 		StockState current = state.value(); // retrieve the state
 
 		if (current == null)
-			throw new ServiceException.EntryNotFoundException("stock_item");
+			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
 
 		return successResult(current, null);
 	}
@@ -77,10 +109,10 @@ public class StockQueryProcess extends QueryProcess {
 
 	private QueryProcessResult itemAdd(Message message) throws Exception {
 		StockState current = state.value();
-		long amount = message.params.get("amount").asLong();
+		long amount = message.params.get(PARAM_AMOUNT).asLong();
 
 		if (current == null)
-			throw new ServiceException.EntryNotFoundException("stock_item");
+			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
 
 		if (amount <= 0)
 			throw new ServiceException("Amount must be positive.");
@@ -93,10 +125,10 @@ public class StockQueryProcess extends QueryProcess {
 
 	private QueryProcessResult itemSubtract(Message message) throws Exception {
 		StockState current = state.value();
-		long amount = message.params.get("amount").asLong();
+		long amount = message.params.get(PARAM_AMOUNT).asLong();
 
 		if (current == null)
-			throw new ServiceException.EntryNotFoundException("stock_item");
+			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
 
 		if (amount <= 0)
 			throw new ServiceException("Amount must be positive.");

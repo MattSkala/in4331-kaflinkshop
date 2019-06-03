@@ -4,16 +4,23 @@ import kaflinkshop.*;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ObjectNode;
-import org.apache.flink.util.Collector;
 
 import javax.annotation.Nullable;
 import java.util.Collections;
 import java.util.List;
 
+import static kaflinkshop.CommunicationFactory.*;
+
 public class OrderQueryProcess extends QueryProcess {
+
+	public static final String STATE_USER_NOT_EXISTS = "no-user";
+	public static final String STATE_USER_ORDER_REMOVED = "user-order-removed";
+	public static final String STATE_USER_ORDER_ADDED = "user-order-added";
+	public static final String STATE_ITEM_EXISTS = "item-exists";
+	public static final String STATE_ITEM_NOT_EXISTS = "no-item";
+	public static final String ENTITY_NAME = "order";
 
 	/**
 	 * The state that is maintained by this process function.
@@ -29,22 +36,6 @@ public class OrderQueryProcess extends QueryProcess {
 	@Override
 	public void open(Configuration parameters) {
 		state = getRuntimeContext().getState(new ValueStateDescriptor<>("order_state", OrderState.class));
-	}
-
-	@Override
-	public void processElement(Message message, Context context, Collector<Output> collector) throws Exception {
-		String route = message.state.route;
-
-		// HOWTO: send message to multiple services
-		if (route.equals("...")) {
-			// do custom things, like send two message (call `collector.collect(...)` twice)
-			collector.collect(new Output(
-					Message.redirect(message, CommunicationFactory.SERVICE_ORDER, "route/to/process", "validate-user", null),
-					CommunicationFactory.USER_IN_TOPIC
-			));
-		}
-
-		super.processElement(message, context, collector);
 	}
 
 	@Override
@@ -83,84 +74,116 @@ public class OrderQueryProcess extends QueryProcess {
 		OrderState current = state.value();
 
 		if (current == null)
-			throw new ServiceException.EntryNotFoundException("order");
+			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
 
 		return successResult(current, null);
 	}
 
 	private QueryProcessResult createOrder(String orderID, Message message) throws Exception {
 		OrderState current = state.value();
-		String userID = message.params.get("user_id").asText();
-		System.out.println(message.state.state);
+		String userID = message.params.get(PARAM_USER_ID).asText();
 
-		if(message.state.state != null && message.state.state.equals("confirmed-user")){
-			current.userChecked = true;
+		if (current == null) { // create new order
+
+			if (message.state.state != null) // state should be empty/null
+				throw new ServiceException.IllegalStateException(message.state.state);
+
+			current = new OrderState(orderID, userID);
 			state.update(current);
+			ObjectNode newParams = message.params.deepCopy();
+			newParams.put(PARAM_ORDER_ID, orderID);
+			// TODO: set some timer!
+			return new QueryProcessResult.Redirect(
+					USER_IN_TOPIC,
+					message.state.route,
+					newParams,
+					"order-create-check-user");
 
-			return successResult(current, "Order created.");
+		} else { // update existing order
+
+			if (message.state.state == null)
+				throw new ServiceException("Order already exists.");
+
+			if (message.state.state.equals(STATE_USER_ORDER_ADDED)) {
+				current.userChecked = true;
+				state.update(current);
+				return successResult(current, "Order created.");
+			}
+
+			if (message.state.state.equals(STATE_USER_NOT_EXISTS)) {
+				state.update(null);
+				return failureResult(current, "Order not created. User did not exist.");
+			}
+
+			throw new ServiceException.IllegalStateException(message.state.state);
 		}
-
-
-		if(message.state.state != null && message.state.state.equals("no-user")){
-			state.update(null);
-
-			return successResult(current, "Order not created. User did not exist.");
-		}
-
-		if (current != null)
-			throw new ServiceException("Order already exists.");
-
-		current = new OrderState(orderID, userID);
-		state.update(current);
-
-		ObjectNode newParams = message.params.deepCopy();
-		newParams.put("order_id", orderID);
-
-
-		// Set some timer!
-		return new QueryProcessResult.Redirect(CommunicationFactory.USER_IN_TOPIC, message.state.route,  newParams, "order-create-check-user");
 	}
 
 	private QueryProcessResult removeOrder(Message message) throws Exception {
 		OrderState current = state.value();
 
 		if (current == null)
-			throw new ServiceException.EntryNotFoundException("order");
+			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
 
-		if(message.state.state != null){
+		if (message.state.state == null) { // initiate order removal process
+			ObjectNode newParams = message.params.deepCopy();
+			newParams.put(PARAM_ORDER_ID, current.orderID);
+			newParams.put(PARAM_USER_ID, current.userID);
+			// TODO: set some timer!
+			return new QueryProcessResult.Redirect(
+					USER_IN_TOPIC,
+					message.state.route,
+					newParams,
+					"check-remove");
+		}
+
+		if (message.state.state.equals(STATE_USER_NOT_EXISTS) || message.state.state.equals(STATE_USER_ORDER_REMOVED)) {
 			state.update(null);
 			return new QueryProcessResult.Success("Order removed.");
 		}
 
-		// Set some timer!
-
-		ObjectNode newParams = message.params.deepCopy();
-		newParams.put("order_id", current.orderID);
-		newParams.put("user_id", current.userID);
-
-		return new QueryProcessResult.Redirect(CommunicationFactory.USER_IN_TOPIC, message.state.route, newParams, "check-remove");
+		throw new ServiceException.IllegalStateException(message.state.state);
 	}
 
 	private QueryProcessResult addItem(Message message) throws Exception {
 		OrderState current = state.value();
-		String itemID = message.params.get("item_id").asText();
+		String itemID = message.params.get(PARAM_ITEM_ID).asText();
 
 		if (current == null)
-			throw new ServiceException.EntryNotFoundException("order");
+			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
 
-		int items = current.products.getOrDefault(itemID, 0);
-		current.products.put(itemID, items + 1);
-		state.update(current);
+		if (message.state.state == null) {
+			// initiate item the process of adding an item
+			ObjectNode newParams = message.params.deepCopy();
+			newParams.put(PARAM_ORDER_ID, current.orderID);
+			newParams.put(PARAM_ITEM_ID, itemID);
+			return new QueryProcessResult.Redirect(STOCK_IN_TOPIC, message.state.route, newParams);
+		}
 
-		return successResult(current, "Item added.");
+		// check if item exists (callback from the stock service)
+		if (message.state.state.equals(STATE_ITEM_EXISTS)) {
+			int items = current.products.getOrDefault(itemID, 0);
+			current.products.put(itemID, items + 1);
+			state.update(current);
+			return successResult(current, "Item added.");
+		}
+
+		// check if item does not exist (callback from the stock service)
+		if (message.state.state.equals(STATE_ITEM_NOT_EXISTS)) {
+			current.products.remove(itemID);
+			state.update(current);
+			return failureResult(current, "Item does not exist.");
+		}
+
+		throw new ServiceException.IllegalStateException(message.state.state);
 	}
 
 	private QueryProcessResult removeItem(Message message) throws Exception {
 		OrderState current = state.value();
-		String itemID = message.params.get("item_id").asText();
+		String itemID = message.params.get(PARAM_ITEM_ID).asText();
 
 		if (current == null)
-			throw new ServiceException.EntryNotFoundException("order");
+			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
 
 		Integer value = current.products.remove(itemID);
 		state.update(current);

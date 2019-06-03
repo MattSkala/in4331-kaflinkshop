@@ -29,7 +29,7 @@ public class UserJob {
 		params.kafkaAddress = CommunicationFactory.KAFKA_DEFAULT_ADDRESS;
 		params.inputTopic = CommunicationFactory.USER_IN_TOPIC;
 		params.defaultOutputTopic = CommunicationFactory.USER_OUT_TOPIC;
-		params.keyExtractor = new SimpleMessageKeyExtractor("user_id");
+		params.keyExtractor = new SimpleMessageKeyExtractor(CommunicationFactory.PARAM_USER_ID);
 		params.processFunction = new UserQueryProcess();
 		params.attachDefaultProperties(CommunicationFactory.ZOOKEEPER_DEFAULT_ADDRESS);
 

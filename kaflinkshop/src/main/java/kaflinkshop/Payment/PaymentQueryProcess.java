@@ -12,6 +12,8 @@ import java.util.List;
 
 public class PaymentQueryProcess extends QueryProcess {
 
+	public static final String ENTITY_NAME = "payment";
+
 	/**
 	 * The state that is maintained by this process function.
 	 */
@@ -55,7 +57,7 @@ public class PaymentQueryProcess extends QueryProcess {
 		PaymentState current = state.value();
 
 		if (current == null)
-			throw new ServiceException.EntryNotFoundException("payment");
+			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
 
 		return successResult(current, null);
 	}
@@ -86,7 +88,7 @@ public class PaymentQueryProcess extends QueryProcess {
 		PaymentState current = state.value();
 
 		if (current == null)
-			throw new ServiceException.EntryNotFoundException("payment");
+			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
 
 		if (current.status != PaymentStatus.PAID)
 			throw new ServiceException("Cannot cancel payment.");

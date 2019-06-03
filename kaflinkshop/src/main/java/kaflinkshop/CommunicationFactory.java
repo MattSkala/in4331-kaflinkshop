@@ -20,6 +20,11 @@ public class CommunicationFactory {
 	public final static String SERVICE_PAYMENT = "payment";
 	public final static String SERVICE_WEB = "web";
 
+	public final static String PARAM_USER_ID = "user_id";
+	public final static String PARAM_ITEM_ID = "item_id";
+	public final static String PARAM_ORDER_ID = "order_id";
+	public final static String PARAM_AMOUNT = "amount";
+
 	public final static String KAFKA_DEFAULT_ADDRESS = "localhost:9092";
 	public final static String ZOOKEEPER_DEFAULT_ADDRESS = "localhost:2181";
 

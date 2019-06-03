@@ -10,7 +10,12 @@ import javax.annotation.Nullable;
 import java.util.Collections;
 import java.util.List;
 
+import static kaflinkshop.CommunicationFactory.*;
+import static kaflinkshop.Order.OrderQueryProcess.*;
+
 public class UserQueryProcess extends QueryProcess {
+
+	public static final String ENTITY_NAME = "user";
 
 	/**
 	 * The state that is maintained by this process function.
@@ -54,13 +59,15 @@ public class UserQueryProcess extends QueryProcess {
 				result = subtractCredits(message);
 				break;
 
-//			Order logic
+			// Order logic
 			case "orders/create":
 				result = createOrder(message);
 				break;
 			case "orders/remove":
 				result = removeOrder(message);
 				break;
+
+			// Error route handler
 			default:
 				throw new ServiceException.IllegalRouteException();
 		}
@@ -68,33 +75,51 @@ public class UserQueryProcess extends QueryProcess {
 		return Collections.singletonList(result);
 	}
 
-	private QueryProcessResult removeOrder(Message message) throws Exception{
+	private QueryProcessResult removeOrder(Message message) throws Exception {
 		UserState current = state.value();
 
 		if (current == null)
-			return new QueryProcessResult.Redirect(CommunicationFactory.ORDER_IN_TOPIC, message.state.route, message.params, "no-user");
+			return new QueryProcessResult.Redirect(
+					ORDER_IN_TOPIC,
+					message.state.route,
+					message.params,
+					STATE_USER_NOT_EXISTS);
 
-		current.orders.remove(message.params.get("order_id").asText());
+		current.orders.remove(message.params.get(PARAM_ORDER_ID).asText());
+		state.update(current);
 
-		return new QueryProcessResult.Redirect(CommunicationFactory.ORDER_IN_TOPIC, message.state.route, message.params, "removed-from-user");
+		return new QueryProcessResult.Redirect(
+				ORDER_IN_TOPIC,
+				message.state.route,
+				message.params,
+				STATE_USER_ORDER_REMOVED);
 	}
 
-	private QueryProcessResult createOrder(Message message) throws Exception{
+	private QueryProcessResult createOrder(Message message) throws Exception {
 		UserState current = state.value();
 
 		if (current == null)
-			return new QueryProcessResult.Redirect(CommunicationFactory.ORDER_IN_TOPIC, message.state.route, message.params, "no-user");
+			return new QueryProcessResult.Redirect(
+					ORDER_IN_TOPIC,
+					message.state.route,
+					message.params,
+					STATE_USER_NOT_EXISTS);
 
-		current.orders.add(message.params.get("order_id").asText());
+		current.orders.add(message.params.get(PARAM_ORDER_ID).asText());
+		state.update(current);
 
-		return new QueryProcessResult.Redirect(CommunicationFactory.ORDER_IN_TOPIC, message.state.route, message.params, "confirmed-user");
+		return new QueryProcessResult.Redirect(
+				ORDER_IN_TOPIC,
+				message.state.route,
+				message.params,
+				STATE_USER_ORDER_ADDED);
 	}
 
 	private QueryProcessResult findUser() throws Exception {
 		UserState current = state.value(); // retrieve the state
 
 		if (current == null)
-			throw new ServiceException.EntryNotFoundException("user");
+			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
 
 		return successResult(current, null);
 	}
@@ -115,7 +140,7 @@ public class UserQueryProcess extends QueryProcess {
 		UserState current = state.value();
 
 		if (current == null)
-			throw new ServiceException.EntryNotFoundException("user");
+			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
 
 		state.update(null);
 
@@ -126,17 +151,17 @@ public class UserQueryProcess extends QueryProcess {
 		UserState current = state.value();
 
 		if (current == null)
-			throw new ServiceException.EntryNotFoundException("user");
+			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
 
 		return successResult(current, null);
 	}
 
 	private QueryProcessResult addCredits(Message message) throws Exception {
 		UserState current = state.value();
-		long amount = message.params.get("amount").asLong();
+		long amount = message.params.get(PARAM_AMOUNT).asLong();
 
 		if (current == null)
-			throw new ServiceException.EntryNotFoundException("user");
+			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
 
 		if (amount <= 0)
 			throw new ServiceException("Amount must be positive.");
@@ -149,10 +174,10 @@ public class UserQueryProcess extends QueryProcess {
 
 	private QueryProcessResult subtractCredits(Message message) throws Exception {
 		UserState current = state.value();
-		long amount = message.params.get("amount").asLong();
+		long amount = message.params.get(PARAM_AMOUNT).asLong();
 
 		if (current == null)
-			throw new ServiceException.EntryNotFoundException("user");
+			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
 
 		if (amount <= 0)
 			throw new ServiceException("Amount must be positive.");

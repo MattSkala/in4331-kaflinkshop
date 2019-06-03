@@ -42,4 +42,19 @@ public class ServiceException extends Exception {
 
 	}
 
+
+	public static class IllegalStateException extends ServiceException {
+
+		public static final String GENERIC_MESSAGE = "Unrecognised state.";
+
+		public IllegalStateException() {
+			super(GENERIC_MESSAGE);
+		}
+
+		public IllegalStateException(String state) {
+			super("Unrecognised state: " + (state == null ? "null." : "\"" + state + "\"."));
+		}
+
+	}
+
 }
