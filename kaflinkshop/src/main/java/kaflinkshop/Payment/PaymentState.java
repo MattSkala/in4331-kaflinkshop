@@ -7,21 +7,31 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.Obje
 public class PaymentState {
 
 	public String orderID;
+	public long price;
 	public PaymentStatus status;
 
 	PaymentState() {
 		orderID = null;
 		status = PaymentStatus.INVALID;
+		price = -1;
 	}
 
 	PaymentState(String orderID) {
 		this.orderID = orderID;
 		this.status = PaymentStatus.INVALID;
+		this.price = -1;
 	}
 
 	PaymentState(String orderID, PaymentStatus status) {
 		this.orderID = orderID;
 		this.status = status;
+		this.price = -1;
+	}
+
+	PaymentState(String orderID, PaymentStatus status, long price) {
+		this.orderID = orderID;
+		this.status = status;
+		this.price = price;
 	}
 
 	public JsonNode toJsonNode(ObjectMapper objectMapper) {

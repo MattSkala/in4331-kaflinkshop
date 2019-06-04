@@ -73,6 +73,9 @@ public class UserQueryProcess extends QueryProcess {
 			case "payment/pay":
 				result = paymentPay(message);
 				break;
+			case "payment/cancelPayment":
+				result = paymentCancel(message);
+				break;
 
 			// Error route handler
 			default:
@@ -80,6 +83,35 @@ public class UserQueryProcess extends QueryProcess {
 		}
 
 		return Collections.singletonList(result);
+	}
+
+	private QueryProcessResult paymentCancel(Message message) throws Exception {
+		UserState current = state.value();
+
+		if (current == null)
+			return new QueryProcessResult.Redirect(
+					PAYMENT_IN_TOPIC,
+					message.state.route,
+					message.params,
+					STATE_PAYMENT_USER_NOT_EXISTS);
+
+		long price = message.params.get(PARAM_PRICE).asLong();
+
+		if (price < 0)
+			return new QueryProcessResult.Redirect(
+					PAYMENT_IN_TOPIC,
+					message.state.route,
+					message.params,
+					STATE_PAYMENT_USER_PRICE_ERROR);
+
+		current.credits += price;
+		state.update(current);
+
+		return new QueryProcessResult.Redirect(
+				PAYMENT_IN_TOPIC,
+				message.state.route,
+				message.params,
+				STATE_PAYMENT_USER_CREDITS_ADDED);
 	}
 
 	private QueryProcessResult paymentPay(Message message) throws Exception {
@@ -93,8 +125,13 @@ public class UserQueryProcess extends QueryProcess {
 					STATE_PAYMENT_USER_NOT_EXISTS);
 
 		long price = message.params.get(PARAM_PRICE).asLong();
-		if (price < 0)
-			throw new ServiceException("Price cannot be negative.");
+
+		if (price < 0) // we allow zero here - perhaps there's a free product
+			return new QueryProcessResult.Redirect(
+					PAYMENT_IN_TOPIC,
+					message.state.route,
+					message.params,
+					STATE_PAYMENT_USER_PRICE_ERROR);
 
 		if (current.credits >= price) {
 			current.credits -= price;

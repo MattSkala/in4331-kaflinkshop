@@ -21,6 +21,8 @@ public class PaymentQueryProcess extends QueryProcess {
 	public static final String STATE_PAYMENT_USER_NOT_EXISTS = "no-user";
 	public static final String STATE_PAYMENT_USER_NO_CREDITS = "no-user-credits";
 	public static final String STATE_PAYMENT_USER_CREDITS_SUBTRACTED = "user-credits-subtracted";
+	public static final String STATE_PAYMENT_USER_CREDITS_ADDED = "user-credits-subtracted-added";
+	public static final String STATE_PAYMENT_USER_PRICE_ERROR = "user-credits-price-error";
 	public static final String STATE_PAYMENT_ORDER_VALIDATE = "order-validate";
 	public static final String STATE_PAYMENT_ORDER_MARK_PAID = "order-mark-paid";
 	public static final String ENTITY_NAME = "payment";
@@ -54,7 +56,7 @@ public class PaymentQueryProcess extends QueryProcess {
 			case "payment/pay":
 				return paymentPay(message, orderID);
 			case "payment/cancelPayment":
-				result = paymentCancel();
+				result = paymentCancel(message, orderID);
 				break;
 			default:
 				throw new ServiceException.IllegalRouteException();
@@ -125,7 +127,7 @@ public class PaymentQueryProcess extends QueryProcess {
 			String userID = message.params.get(PARAM_USER_ID).asText();
 			long price = message.params.get(PARAM_PRICE).asLong();
 
-			if (price < 0) { // zero is fine...
+			if (price == 0) {
 				current.status = PaymentStatus.INVALID;
 				state.update(current);
 				ObjectNode params = message.params.deepCopy();
@@ -133,9 +135,23 @@ public class PaymentQueryProcess extends QueryProcess {
 				return Collections.singletonList(
 						new QueryProcessResult.Failure(
 								params,
-								"Price cannot be negative.")
-				);
+								"Cannot pay for an empty order."));
 			}
+
+			if (price < 0) {
+				current.status = PaymentStatus.INVALID;
+				state.update(current);
+				ObjectNode params = message.params.deepCopy();
+				current.addParams(params);
+				return Collections.singletonList(
+						new QueryProcessResult.Failure(
+								params,
+								"Price cannot be negative"));
+			}
+
+			// set the price
+			current.price = price;
+			state.update(current);
 
 			return Collections.singletonList(
 					new QueryProcessResult.Redirect(
@@ -165,6 +181,15 @@ public class PaymentQueryProcess extends QueryProcess {
 					new QueryProcessResult.Failure(params, "User does not have enough credits."));
 		}
 
+		if (message.state.state.equals(STATE_PAYMENT_USER_PRICE_ERROR)) {
+			ObjectNode params = message.params.deepCopy();
+			current.addParams(params);
+			return Collections.singletonList(
+					new QueryProcessResult.Failure(
+							params,
+							"Invalid price."));
+		}
+
 		if (message.state.state.equals(STATE_PAYMENT_USER_CREDITS_SUBTRACTED)) {
 			current.status = PaymentStatus.PAID;
 			state.update(current);
@@ -189,7 +214,7 @@ public class PaymentQueryProcess extends QueryProcess {
 		throw new ServiceException.IllegalStateException(message.state.state);
 	}
 
-	private QueryProcessResult paymentCancel() throws Exception {
+	private QueryProcessResult paymentCancel(Message message, String orderID) throws Exception {
 		PaymentState current = state.value();
 
 		if (current == null)
@@ -198,9 +223,67 @@ public class PaymentQueryProcess extends QueryProcess {
 		if (current.status != PaymentStatus.PAID)
 			throw new ServiceException("Cannot cancel payment.");
 
-		current.status = PaymentStatus.CANCELLED;
-		state.update(current);
-		return successResult(current, "Payment cancelled.");
+		if (message.state.state == null) {
+			return new QueryProcessResult.Redirect(
+					ORDER_IN_TOPIC,
+					message.state.route,
+					message.params,
+					"get-user-id");
+		}
+
+		// receive message from the Orders service
+
+		if (message.state.state.equals(STATE_PAYMENT_ORDER_NOT_EXISTS)) {
+			ObjectNode params = message.params.deepCopy();
+			current.addParams(params);
+			return new QueryProcessResult.Failure(
+					params,
+					"Order does not exist anymore.");
+		}
+
+		if (message.state.state.equals(STATE_PAYMENT_ORDER_EXISTS)) {
+			long price = message.params.get(PARAM_PRICE).asLong();
+			String userID = message.params.get(PARAM_USER_ID).asText();
+
+			if (price != current.price)
+				throw new ServiceException("Payment and order prices do not match.");
+
+			return new QueryProcessResult.Redirect(
+					USER_IN_TOPIC,
+					message.state.route,
+					message.params,
+					"add-user-credits");
+		}
+
+		// receive message form the Users service
+
+		if (message.state.state.equals(STATE_PAYMENT_USER_NOT_EXISTS)) {
+			ObjectNode params = message.params.deepCopy();
+			current.addParams(params);
+			return new QueryProcessResult.Failure(
+					params,
+					"User does not exist anymore.");
+		}
+
+		if (message.state.state.equals(STATE_PAYMENT_USER_PRICE_ERROR)) {
+			ObjectNode params = message.params.deepCopy();
+			current.addParams(params);
+			return new QueryProcessResult.Failure(
+					params,
+					"Invalid price.");
+		}
+
+		if (message.state.state.equals(STATE_PAYMENT_USER_CREDITS_ADDED)) {
+			current.status = PaymentStatus.CANCELLED;
+			state.update(current);
+			ObjectNode params = message.params.deepCopy();
+			current.addParams(params);
+			return new QueryProcessResult.Success(
+					params,
+					"Payment cancelled. User credits refunded.");
+		}
+
+		throw new ServiceException.IllegalStateException(message.state.state);
 	}
 
 	private QueryProcessResult successResult(PaymentState state, @Nullable String msg) {

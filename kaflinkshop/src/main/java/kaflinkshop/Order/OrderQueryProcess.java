@@ -68,6 +68,9 @@ public class OrderQueryProcess extends QueryProcess {
 			// Payment logic
 			case "payment/pay":
 				return paymentPay(message);
+			case "payment/cancelPayment":
+				result = paymentCancel(message);
+				break;
 
 			// Error route handler
 			default:
@@ -75,6 +78,26 @@ public class OrderQueryProcess extends QueryProcess {
 		}
 
 		return Collections.singletonList(result);
+	}
+
+	private QueryProcessResult paymentCancel(Message message) throws Exception {
+		OrderState current = state.value();
+
+		if (current == null)
+			return new QueryProcessResult.Redirect(
+					PAYMENT_IN_TOPIC,
+					message.state.route,
+					message.params,
+					STATE_PAYMENT_ORDER_NOT_EXISTS);
+
+		ObjectNode params = message.params.deepCopy();
+		params.put(PARAM_USER_ID, current.userID);
+		params.put(PARAM_PRICE, current.countTotalItems());
+		return new QueryProcessResult.Redirect(
+				PAYMENT_IN_TOPIC,
+				message.state.route,
+				params,
+				STATE_PAYMENT_ORDER_EXISTS);
 	}
 
 	private List<QueryProcessResult> paymentPay(Message message) throws Exception {
