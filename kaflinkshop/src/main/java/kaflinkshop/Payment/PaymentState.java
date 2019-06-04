@@ -4,6 +4,8 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ObjectNode;
 
+import static kaflinkshop.CommunicationFactory.*;
+
 public class PaymentState {
 
 	public String orderID;
@@ -41,9 +43,9 @@ public class PaymentState {
 	}
 
 	public void addParams(ObjectNode node) {
-		node.put("order_id", this.orderID);
-		node.put("status", this.status.name());
-		node.put("status_code", this.status.getStatusCode());
+		node.put(PARAM_ORDER_ID, this.orderID);
+		node.put(PARAM_PAYMENT_STATUS_TEXT, this.status.name());
+		node.put(PARAM_PAYMENT_STATUS_CODE, this.status.getStatusCode());
 	}
 
 }

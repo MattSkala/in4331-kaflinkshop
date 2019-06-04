@@ -25,6 +25,16 @@ public class CommunicationFactory {
 	public final static String PARAM_ORDER_ID = "order_id";
 	public final static String PARAM_AMOUNT = "amount";
 	public final static String PARAM_PRICE = "price";
+	public final static String PARAM_PRODUCTS = "products";
+	public final static String PARAM_ORDER_PAID = "is_paid";
+	public final static String PARAM_USER_BALANCE = "balance";
+	public final static String PARAM_USER_CHECKED = "user_checked";
+	public final static String PARAM_USER_CREDITS = "user_credits";
+	public final static String PARAM_USER_ORDERS = "orders";
+	public final static String PARAM_PAYMENT_STATUS_TEXT = "status";
+	public final static String PARAM_PAYMENT_STATUS_CODE = "status_code";
+	public final static String PARAM_BATCH_ID = "batch_id";
+	public final static String PARAM_BATCH_COUNT = "batch_count";
 
 	public final static String KAFKA_DEFAULT_ADDRESS = "localhost:9092";
 	public final static String ZOOKEEPER_DEFAULT_ADDRESS = "localhost:2181";

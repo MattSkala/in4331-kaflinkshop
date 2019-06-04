@@ -9,6 +9,8 @@ import org.apache.flink.streaming.api.windowing.triggers.Trigger;
 import org.apache.flink.streaming.api.windowing.triggers.TriggerResult;
 import org.apache.flink.streaming.api.windowing.windows.Window;
 
+import static kaflinkshop.CommunicationFactory.PARAM_BATCH_COUNT;
+
 public class BatchCountTrigger extends Trigger<Message, Window> {
 
 	private static final long serialVersionUID = 1L;
@@ -22,9 +24,9 @@ public class BatchCountTrigger extends Trigger<Message, Window> {
 		ReducingState<Long> count = ctx.getPartitionedState(this.stateDesc);
 		count.add(1L);
 
-		if (!message.params.has("batch_count"))
-			throw new IllegalStateException("Message should contain field 'batch_count'.");
-		long maxCount = message.params.get("batch_count").asLong();
+		if (!message.params.has(PARAM_BATCH_COUNT))
+			throw new IllegalStateException("Message should contain field \"" + PARAM_BATCH_COUNT + "\".");
+		long maxCount = message.params.get(PARAM_BATCH_COUNT).asLong();
 
 		if ((Long) count.get() >= maxCount) {
 			count.clear();

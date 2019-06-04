@@ -4,6 +4,9 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ObjectNode;
 
+import static kaflinkshop.CommunicationFactory.PARAM_AMOUNT;
+import static kaflinkshop.CommunicationFactory.PARAM_ITEM_ID;
+
 public class StockState {
 
 	public String itemID;
@@ -26,8 +29,8 @@ public class StockState {
 
 	public JsonNode toJsonNode(ObjectMapper objectMapper) {
 		ObjectNode node = objectMapper.createObjectNode();
-		node.put("item_id", this.itemID);
-		node.put("amount", this.amount);
+		node.put(PARAM_ITEM_ID, this.itemID);
+		node.put(PARAM_AMOUNT, this.amount);
 		return node;
 	}
 

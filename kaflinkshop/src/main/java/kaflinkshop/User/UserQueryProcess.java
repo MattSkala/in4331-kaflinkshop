@@ -137,7 +137,7 @@ public class UserQueryProcess extends QueryProcess {
 			current.credits -= price;
 			state.update(current);
 			ObjectNode params = message.params.deepCopy();
-			params.put("user_credits", current.credits);
+			params.put(PARAM_USER_CREDITS, current.credits);
 			return new QueryProcessResult.Redirect(
 					PAYMENT_IN_TOPIC,
 					message.state.route,
@@ -145,7 +145,7 @@ public class UserQueryProcess extends QueryProcess {
 					STATE_PAYMENT_USER_CREDITS_SUBTRACTED);
 		} else {
 			ObjectNode params = message.params.deepCopy();
-			params.put("user_credits", current.credits);
+			params.put(PARAM_USER_CREDITS, current.credits);
 			return new QueryProcessResult.Redirect(
 					PAYMENT_IN_TOPIC,
 					message.state.route,

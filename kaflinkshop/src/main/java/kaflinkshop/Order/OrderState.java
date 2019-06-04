@@ -6,6 +6,8 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.Obje
 
 import java.util.HashMap;
 
+import static kaflinkshop.CommunicationFactory.*;
+
 public class OrderState {
 
 	public String orderID;
@@ -26,11 +28,11 @@ public class OrderState {
 
 	public JsonNode toJsonNode(ObjectMapper objectMapper) {
 		ObjectNode node = objectMapper.createObjectNode();
-		node.put("order_id", this.orderID);
-		node.put("user_id", this.userID);
-		node.put("user_checked", this.userChecked);
-		node.put("is_paid", this.isPaid);
-		node.set("products", getProductsAsJson(objectMapper));
+		node.put(PARAM_ORDER_ID, this.orderID);
+		node.put(PARAM_USER_ID, this.userID);
+		node.put(PARAM_USER_CHECKED, this.userChecked);
+		node.put(PARAM_ORDER_PAID, this.isPaid);
+		node.set(PARAM_PRODUCTS, getProductsAsJson(objectMapper));
 		return node;
 	}
 

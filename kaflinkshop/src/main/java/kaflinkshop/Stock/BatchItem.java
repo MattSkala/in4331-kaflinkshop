@@ -26,7 +26,7 @@ public class BatchItem extends Message {
 	public static BatchItem redirectMessage(Message original, String itemID, String batchID, long amount, String route) {
 		ObjectNode params = new ObjectMapper().createObjectNode();
 		params.put(PARAM_ITEM_ID, itemID);
-		params.put("batch_id", batchID);
+		params.put(PARAM_BATCH_ID, batchID);
 		params.put(PARAM_AMOUNT, amount);
 
 		Message message = Message.redirect(

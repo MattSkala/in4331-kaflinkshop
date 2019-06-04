@@ -7,6 +7,8 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.Obje
 import java.util.HashSet;
 import java.util.Set;
 
+import static kaflinkshop.CommunicationFactory.*;
+
 public class UserState {
 
 	public String userID;
@@ -33,9 +35,9 @@ public class UserState {
 
 	public JsonNode toJsonNode(ObjectMapper objectMapper) {
 		ObjectNode node = objectMapper.createObjectNode();
-		node.put("user_id", this.userID);
-		node.put("balance", this.credits);
-		node.put("orders", this.orders.toString());
+		node.put(PARAM_USER_ID, this.userID);
+		node.put(PARAM_USER_BALANCE, this.credits);
+		node.put(PARAM_USER_ORDERS, this.orders.toString());
 		return node;
 	}
 

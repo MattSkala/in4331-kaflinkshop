@@ -1,6 +1,5 @@
 package kaflinkshop.Stock;
 
-import com.esotericsoftware.kryo.util.ObjectMap;
 import kaflinkshop.Message;
 import org.apache.flink.api.common.functions.AggregateFunction;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
@@ -77,13 +76,12 @@ public class BatchCollector implements AggregateFunction<Message, BatchCollector
 			ObjectNode params = objectMapper.createObjectNode();
 			params.put(PARAM_ORDER_ID, this.message.params.get(PARAM_ORDER_ID).asText());
 			params.put(PARAM_USER_ID, this.message.params.get(PARAM_USER_ID).asText());
-			params.set("products", products);
+			params.set(PARAM_PRODUCTS, products);
 
 			return Message.redirect(
 					this.message,
 					SERVICE_STOCK,
-					// this.message.state.route,
-					"pass", // TODO: change this
+					this.message.input.route,
 					this.message.state.state,
 					params);
 		}
