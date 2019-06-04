@@ -1,7 +1,6 @@
 package kaflinkshop;
 
-import org.apache.flink.api.common.functions.FlatMapFunction;
-import org.apache.flink.util.Collector;
+import org.apache.flink.api.common.functions.MapFunction;
 
 import java.util.Objects;
 
@@ -14,16 +13,16 @@ import java.util.Objects;
  * object with an associated key, whereas the two alternatives only link a message and its (previously retrieved)
  * key.
  */
-public abstract class MessageKeyExtractor implements FlatMapFunction<Message, Message> {
+public abstract class MessageKeyExtractor implements MapFunction<Message, Message> {
 
 	public abstract String getKey(Message message);
 
 	@Override
-	public void flatMap(Message message, Collector<Message> collector) {
+	public Message map(Message message) throws Exception {
 		String key = getKey(message);
 		Objects.requireNonNull(key);
 		message.state.state_id = key;
-		collector.collect(message);
+		return message;
 	}
 
 }

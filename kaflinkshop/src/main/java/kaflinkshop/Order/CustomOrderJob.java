@@ -34,16 +34,15 @@ public class CustomOrderJob {
 		params.kafkaAddress = CommunicationFactory.KAFKA_DEFAULT_ADDRESS;
 		params.inputTopic = CommunicationFactory.ORDER_IN_TOPIC;
 		params.defaultOutputTopic = CommunicationFactory.ORDER_OUT_TOPIC;
-		params.keyExtractor = new SimpleMessageKeyExtractor("order_id");
+		params.keyExtractor = new SimpleMessageKeyExtractor(CommunicationFactory.PARAM_ORDER_ID);
 		params.processFunction = new OrderQueryProcess();
 		params.attachDefaultProperties(CommunicationFactory.ZOOKEEPER_DEFAULT_ADDRESS);
 
 		// check if all params are given
 		if (!params.isValid())
-			throw new IllegalArgumentException("Params must be filled in.");
+			throw new IllegalStateException("Params must be filled in.");
 
-		// instantiate required components
-		MessageParser messageParser = new MessageParser();
+		// instantiate the producer
 		FlinkKafkaProducer011<Output> producer = new FlinkKafkaProducer011<>(
 				params.kafkaAddress,
 				params.defaultOutputTopic,
@@ -57,8 +56,8 @@ public class CustomOrderJob {
 		stream.print();
 
 		KeyedStream<Message, String> keyedStream = stream
-				.flatMap(messageParser)
-				.flatMap(params.keyExtractor)
+				.map(new MessageParser())
+				.map(params.keyExtractor)
 				.keyBy(new MessageKeySelector());
 
 		/*

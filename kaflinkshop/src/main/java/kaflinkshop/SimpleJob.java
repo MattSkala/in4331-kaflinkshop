@@ -23,8 +23,7 @@ public class SimpleJob {
 		if (!this.params.isValid())
 			throw new IllegalArgumentException("Params must be filled in.");
 
-		// instantiate required components
-		MessageParser messageParser = new MessageParser();
+		// instantiate the producer
 		FlinkKafkaProducer011<Output> producer = new FlinkKafkaProducer011<>(
 				params.kafkaAddress,
 				params.defaultOutputTopic,
@@ -34,11 +33,9 @@ public class SimpleJob {
 		StreamExecutionEnvironment environment = StreamExecutionEnvironment.getExecutionEnvironment();
 
 		// retrieve and process input stream
-		DataStream<String> stream = environment.addSource(new FlinkKafkaConsumer011<>(params.inputTopic, new SimpleStringSchema(), params.properties));
-		stream.print();
-
-		stream.flatMap(messageParser)
-				.flatMap(params.keyExtractor)
+		environment.addSource(new FlinkKafkaConsumer011<>(params.inputTopic, new SimpleStringSchema(), params.properties))
+				.map(new MessageParser())
+				.map(params.keyExtractor)
 				.keyBy(new MessageKeySelector())
 				.process(params.processFunction)
 				.addSink(producer);

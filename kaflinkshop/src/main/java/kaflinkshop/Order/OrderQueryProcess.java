@@ -47,7 +47,7 @@ public class OrderQueryProcess extends QueryProcess {
 
 		switch (route) {
 			case "orders/find":
-				result = findOrder();
+				result = findOrder(message);
 				break;
 			case "orders/create":
 				result = createOrder(orderID, message);
@@ -70,6 +70,10 @@ public class OrderQueryProcess extends QueryProcess {
 				return paymentPay(message);
 			case "payment/cancelPayment":
 				result = paymentCancel(message);
+				break;
+
+			case "pass":
+				result = new QueryProcessResult.Success(message.params, "pass");
 				break;
 
 			// Error route handler
@@ -115,6 +119,20 @@ public class OrderQueryProcess extends QueryProcess {
 								message.params,
 								STATE_PAYMENT_ORDER_NOT_EXISTS));
 
+			{
+				// check if all items exist
+				// TODO: fix this
+				ObjectNode params = message.params.deepCopy();
+				params.set("products", current.getProductsAsJson(objectMapper));
+				if (true)
+					return Collections.singletonList(
+							new QueryProcessResult.Redirect(
+									STOCK_IN_TOPIC,
+									"batch/validate",
+									params,
+									"batch:validate"));
+			}
+
 			// TODO: check if all items exist?
 			long price = current.countTotalItems();
 
@@ -143,11 +161,22 @@ public class OrderQueryProcess extends QueryProcess {
 		throw new ServiceException.IllegalStateException(message.state.state);
 	}
 
-	private QueryProcessResult findOrder() throws Exception {
+	private QueryProcessResult findOrder(Message message) throws Exception {
 		OrderState current = state.value();
 
 		if (current == null)
 			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
+
+		// check if all items exist
+		// TODO: remove this
+		ObjectNode params = message.params.deepCopy();
+		params.set("products", current.getProductsAsJson(objectMapper));
+		if (true)
+			return new QueryProcessResult.Redirect(
+					STOCK_IN_TOPIC,
+					"batch/validate",
+					params,
+					"batch:validate");
 
 		return successResult(current, null);
 	}
@@ -230,30 +259,35 @@ public class OrderQueryProcess extends QueryProcess {
 		if (current.isPaid)
 			throw new ServiceException("Cannot modify an order that has already been paid.");
 
-		if (message.state.state == null) {
-			// initiate item the process of adding an item
-			ObjectNode newParams = message.params.deepCopy();
-			newParams.put(PARAM_ORDER_ID, current.orderID);
-			newParams.put(PARAM_ITEM_ID, itemID);
-			return new QueryProcessResult.Redirect(STOCK_IN_TOPIC, message.state.route, newParams);
-		}
+		int items = current.products.getOrDefault(itemID, 0);
+		current.products.put(itemID, items + 1);
+		state.update(current);
+		return successResult(current, null);
 
-		// check if item exists (callback from the stock service)
-		if (message.state.state.equals(STATE_ITEM_EXISTS)) {
-			int items = current.products.getOrDefault(itemID, 0);
-			current.products.put(itemID, items + 1);
-			state.update(current);
-			return successResult(current, "Item added.");
-		}
-
-		// check if item does not exist (callback from the stock service)
-		if (message.state.state.equals(STATE_ITEM_NOT_EXISTS)) {
-			current.products.remove(itemID);
-			state.update(current);
-			return failureResult(current, "Item does not exist.");
-		}
-
-		throw new ServiceException.IllegalStateException(message.state.state);
+		// if (message.state.state == null) {
+		// 	// initiate item the process of adding an item
+		// 	ObjectNode newParams = message.params.deepCopy();
+		// 	newParams.put(PARAM_ORDER_ID, current.orderID);
+		// 	newParams.put(PARAM_ITEM_ID, itemID);
+		// 	return new QueryProcessResult.Redirect(STOCK_IN_TOPIC, message.state.route, newParams);
+		// }
+		//
+		// // check if item exists (callback from the stock service)
+		// if (message.state.state.equals(STATE_ITEM_EXISTS)) {
+		// 	int items = current.products.getOrDefault(itemID, 0);
+		// 	current.products.put(itemID, items + 1);
+		// 	state.update(current);
+		// 	return successResult(current, "Item added.");
+		// }
+		//
+		// // check if item does not exist (callback from the stock service)
+		// if (message.state.state.equals(STATE_ITEM_NOT_EXISTS)) {
+		// 	current.products.remove(itemID);
+		// 	state.update(current);
+		// 	return failureResult(current, "Item does not exist.");
+		// }
+		//
+		// throw new ServiceException.IllegalStateException(message.state.state);
 	}
 
 	private QueryProcessResult removeItem(Message message) throws Exception {

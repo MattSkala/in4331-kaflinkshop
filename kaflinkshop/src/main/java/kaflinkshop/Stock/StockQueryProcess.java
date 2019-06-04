@@ -4,7 +4,9 @@ import kaflinkshop.*;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ObjectNode;
 
 import javax.annotation.Nullable;
 import java.util.Collections;
@@ -12,6 +14,7 @@ import java.util.List;
 
 import static kaflinkshop.CommunicationFactory.ORDER_IN_TOPIC;
 import static kaflinkshop.CommunicationFactory.PARAM_AMOUNT;
+import static kaflinkshop.CommunicationFactory.STOCK_IN_TOPIC;
 import static kaflinkshop.Order.OrderQueryProcess.STATE_ITEM_EXISTS;
 import static kaflinkshop.Order.OrderQueryProcess.STATE_ITEM_NOT_EXISTS;
 
@@ -61,12 +64,31 @@ public class StockQueryProcess extends QueryProcess {
 				result = orderAddItem(message);
 				break;
 
+			// Batch processing
+			case "batch/validate":
+				result = batchValidate(message);
+				break;
+
 			// Error route handler
 			default:
 				throw new ServiceException.IllegalRouteException();
 		}
 
 		return Collections.singletonList(result);
+	}
+
+	private QueryProcessResult batchValidate(Message message) throws Exception {
+		StockState current = state.value();
+
+		long amount = current == null ? -1 : current.amount;
+		ObjectNode params = message.params.deepCopy();
+		params.put(PARAM_AMOUNT, amount);
+
+		return new QueryProcessResult.Redirect(
+				STOCK_IN_TOPIC,
+				message.state.route,
+				params,
+				message.state.state);
 	}
 
 	private QueryProcessResult orderAddItem(Message message) throws Exception {

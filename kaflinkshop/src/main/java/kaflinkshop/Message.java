@@ -60,13 +60,13 @@ public class Message {
 	public Result result;
 	public List<PathPoint> path;
 
-	Message() {
+	public Message() {
 		ObjectMapper objectMapper = new ObjectMapper();
 		params = objectMapper.createObjectNode();
 		this.path = new ArrayList<>();
 	}
 
-	Message(MessageInput input, State state, JsonNode params, List<PathPoint> path, @Nullable Result result) {
+	public Message(MessageInput input, State state, JsonNode params, List<PathPoint> path, @Nullable Result result) {
 		this.input = input;
 		this.state = state;
 		this.params = params;
@@ -106,7 +106,7 @@ public class Message {
 		for (PathPoint pathPoint : this.path) {
 			ObjectNode node = objectMapper.createObjectNode();
 			node.put("consumer", pathPoint.consumer);
-			node.put("route", pathPoint.consumer);
+			node.put("route", pathPoint.route);
 			node.put("state", pathPoint.state);
 			node.put("state_id", pathPoint.state_id);
 			node.set("params", pathPoint.params);

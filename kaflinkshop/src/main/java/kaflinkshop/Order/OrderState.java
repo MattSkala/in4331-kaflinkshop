@@ -25,17 +25,19 @@ public class OrderState {
 	}
 
 	public JsonNode toJsonNode(ObjectMapper objectMapper) {
-		ObjectNode products = objectMapper.createObjectNode();
-		this.products.forEach(products::put);
-
 		ObjectNode node = objectMapper.createObjectNode();
 		node.put("order_id", this.orderID);
 		node.put("user_id", this.userID);
 		node.put("user_checked", this.userChecked);
 		node.put("is_paid", this.isPaid);
-		node.set("products", products);
-
+		node.set("products", getProductsAsJson(objectMapper));
 		return node;
+	}
+
+	public JsonNode getProductsAsJson(ObjectMapper objectMapper) {
+		ObjectNode products = objectMapper.createObjectNode();
+		this.products.forEach(products::put);
+		return products;
 	}
 
 	public long countTotalItems() {
