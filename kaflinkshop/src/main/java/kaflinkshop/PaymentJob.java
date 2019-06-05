@@ -18,25 +18,13 @@
 
 package kaflinkshop;
 
-import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
-import org.apache.flink.api.java.tuple.Tuple2;
-import org.apache.flink.configuration.CheckpointingOptions;
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.contrib.streaming.state.RocksDBStateBackendFactory;
-import org.apache.flink.runtime.state.StateBackend;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.streaming.api.datastream.DataStream;
-import org.apache.flink.streaming.api.environment.CheckpointConfig;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer011;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer011;
-import org.apache.flink.streaming.util.serialization.KeyedSerializationSchema;
-import org.apache.flink.util.Collector;
 
 import java.util.Properties;
-import java.util.UUID;
 
 
 /**
@@ -51,31 +39,37 @@ import java.util.UUID;
  * <p>If you change the name of the main class (with the public static void main(String[] args))
  * method, change the respective entry in the POM.xml file (simply search for 'mainClass').
  */
-public class OrderJob {
+public class PaymentJob {
 	public static void main(String[] args) throws Exception {
 		// set up the streaming execution environment
 		final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
-
 		String kafkaAddress = "localhost:9092";
+		String outputTopic = "payment_out_api1";
+		String inputTopic = "payment_in";
 		Properties properties = new Properties();
 		properties.setProperty("bootstrap.servers", kafkaAddress);
 		properties.setProperty("zookeeper.connect", "localhost:2181");
 		DataStream<String> stream = env
-				.addSource(new FlinkKafkaConsumer011<>(CommunicationFactory.ORDER_IN_TOPIC, new SimpleStringSchema(), properties));
+				.addSource(new FlinkKafkaConsumer011<>(inputTopic, new SimpleStringSchema(), properties));
 
-		FlinkKafkaProducer011<Tuple2<String, String>> flinkKafkaProducer = CommunicationFactory.createProducer(
-				CommunicationFactory.ORDER_OUT_TOPIC, kafkaAddress);
-
-		// TODO: change "user_id" to a suitable value
-		stream.flatMap(new JsonParser("order_id")).keyBy(0).process(new OrderQueryProcess()).addSink(flinkKafkaProducer);
-
+		FlinkKafkaProducer011<String> flinkKafkaProducer = createProducer(
+				outputTopic, kafkaAddress);
 		stream.print();
+
+		stream.flatMap(new PaymentJsonParser()).keyBy(0).process(new PaymentQueryProcess()).addSink(flinkKafkaProducer);
+
 		// execute program
-		env.execute("User streaming job execution");
+		env.execute("Payment streaming job execution");
 	}
 
 
+	private static FlinkKafkaProducer011<String> createProducer(
+			String topic, String kafkaAddress) {
+
+		return new FlinkKafkaProducer011<>(kafkaAddress,
+				topic, new SimpleStringSchema());
+	}
 }
 
 

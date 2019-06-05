@@ -171,7 +171,7 @@ app.router.add_post('/payment/pay/{user_id}/{order_id}',
     route_handler('payment/pay', TOPIC_PAYMENT_INPUT, TOPIC_PAYMENT_OUTPUT))
 app.router.add_post('/payment/cancelPayment/{user_id}/{order_id}',
     route_handler('payment/cancelPayment', TOPIC_PAYMENT_INPUT, TOPIC_PAYMENT_OUTPUT))
-app.router.add_get('/payment/status/{order_id}',
+app.router.add_get('/payment/status/{user_id}/{order_id}',
     route_handler('payment/status', TOPIC_PAYMENT_INPUT, TOPIC_PAYMENT_OUTPUT))
 
 # https://aiohttp.readthedocs.io/en/stable/web_advanced.html#background-tasks
