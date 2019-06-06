@@ -76,14 +76,16 @@ public class PaymentQueryProcess extends QueryProcess {
 
 	private List<QueryProcessResult> paymentPay(Message message, String orderID) throws Exception {
 		PaymentState current = state.value();
+		String messageState = message.state.state;
 
 		if (current == null
 				|| current.status == PaymentStatus.INVALID
 				|| current.status == PaymentStatus.FAILED
+				|| current.status == PaymentStatus.CANCELLED
 		) {
 
-			if (message.state.state != null) // we expect this to be null if went from the web service
-				throw new ServiceException.IllegalStateException(message.state.state);
+			if (messageState != null) // we expect this to be null if went from the web service
+				throw new ServiceException.IllegalStateException(messageState);
 
 			// create/update payment
 			if (current == null)
@@ -92,19 +94,24 @@ public class PaymentQueryProcess extends QueryProcess {
 				current.status = PaymentStatus.PROCESSING;
 			state.update(current);
 
-			ObjectNode params = message.params.deepCopy();
-			params.put(PARAM_ORDER_ID, orderID);
+			if (message.params.has(PARAM_USER_ID) && message.params.has(PARAM_PRICE)) {
+				// skip sending the message to the Orders service, since it already has all the required information (user ID and price)
+				messageState = STATE_PAYMENT_ORDER_EXISTS; // "forward" message, see the logic below
+			} else {
+				ObjectNode params = message.params.deepCopy();
+				params.put(PARAM_ORDER_ID, orderID);
 
-			return Collections.singletonList(
-					new QueryProcessResult.Redirect(
-							ORDER_IN_TOPIC,
-							message.state.route,
-							params,
-							STATE_PAYMENT_ORDER_VALIDATE));
+				return Collections.singletonList(
+						new QueryProcessResult.Redirect(
+								ORDER_IN_TOPIC,
+								message.state.route,
+								params,
+								STATE_PAYMENT_ORDER_VALIDATE));
+			}
 		}
 
 		// check for invalid state
-		if (message.state.state == null) { // no state == request for making a payment
+		if (messageState == null) { // no state == request for making a payment
 			if (current.status == PaymentStatus.PROCESSING)
 				throw new ServiceException("Payment is already being executed.");
 			if (current.status == PaymentStatus.PAID)
@@ -114,7 +121,7 @@ public class PaymentQueryProcess extends QueryProcess {
 
 		// check for the response from the Orders service
 
-		if (message.state.state.equals(STATE_PAYMENT_ORDER_NOT_EXISTS)) {
+		if (messageState.equals(STATE_PAYMENT_ORDER_NOT_EXISTS)) {
 			current.status = PaymentStatus.INVALID; // update this just in case there's some hidden references to this object somewhere
 			state.update(null);
 			ObjectNode params = message.params.deepCopy();
@@ -123,7 +130,7 @@ public class PaymentQueryProcess extends QueryProcess {
 					new QueryProcessResult.Failure(params, "Order does not exist."));
 		}
 
-		if (message.state.state.equals(STATE_PAYMENT_ORDER_EXISTS)) {
+		if (messageState.equals(STATE_PAYMENT_ORDER_EXISTS)) {
 			String userID = message.params.get(PARAM_USER_ID).asText();
 			long price = message.params.get(PARAM_PRICE).asLong();
 
@@ -163,7 +170,7 @@ public class PaymentQueryProcess extends QueryProcess {
 
 		// check for the response from the Users service
 
-		if (message.state.state.equals(STATE_PAYMENT_USER_NOT_EXISTS)) {
+		if (messageState.equals(STATE_PAYMENT_USER_NOT_EXISTS)) {
 			current.status = PaymentStatus.INVALID; // let's keep this payment as the order does still exist
 			state.update(current);
 			ObjectNode params = message.params.deepCopy();
@@ -172,7 +179,7 @@ public class PaymentQueryProcess extends QueryProcess {
 					new QueryProcessResult.Failure(params, "User does not exist."));
 		}
 
-		if (message.state.state.equals(STATE_PAYMENT_USER_NO_CREDITS)) {
+		if (messageState.equals(STATE_PAYMENT_USER_NO_CREDITS)) {
 			current.status = PaymentStatus.FAILED;
 			state.update(current);
 			ObjectNode params = message.params.deepCopy();
@@ -181,7 +188,7 @@ public class PaymentQueryProcess extends QueryProcess {
 					new QueryProcessResult.Failure(params, "User does not have enough credits."));
 		}
 
-		if (message.state.state.equals(STATE_PAYMENT_USER_PRICE_ERROR)) {
+		if (messageState.equals(STATE_PAYMENT_USER_PRICE_ERROR)) {
 			ObjectNode params = message.params.deepCopy();
 			current.addParams(params);
 			return Collections.singletonList(
@@ -190,7 +197,7 @@ public class PaymentQueryProcess extends QueryProcess {
 							"Invalid price."));
 		}
 
-		if (message.state.state.equals(STATE_PAYMENT_USER_CREDITS_SUBTRACTED)) {
+		if (messageState.equals(STATE_PAYMENT_USER_CREDITS_SUBTRACTED)) {
 			current.status = PaymentStatus.PAID;
 			state.update(current);
 			// send response to the web server as well as update the order simultaneously
@@ -211,7 +218,7 @@ public class PaymentQueryProcess extends QueryProcess {
 		}
 
 		// illegal state
-		throw new ServiceException.IllegalStateException(message.state.state);
+		throw new ServiceException.IllegalStateException(messageState);
 	}
 
 	private QueryProcessResult paymentCancel(Message message, String orderID) throws Exception {

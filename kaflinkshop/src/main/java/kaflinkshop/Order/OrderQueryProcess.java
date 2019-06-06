@@ -1,16 +1,19 @@
 package kaflinkshop.Order;
 
+import com.esotericsoftware.kryo.serializers.DefaultSerializers;
+import jdk.nashorn.internal.ir.ReturnNode;
 import kaflinkshop.*;
+import kaflinkshop.OperationResult;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ObjectNode;
+import sun.util.resources.cldr.tn.CurrencyNames_tn;
 
 import javax.annotation.Nullable;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 import static kaflinkshop.CommunicationFactory.*;
 import static kaflinkshop.Payment.PaymentQueryProcess.*;
@@ -63,8 +66,7 @@ public class OrderQueryProcess extends QueryProcess {
 				result = removeItem(message);
 				break;
 			case "orders/checkout":
-				result = checkoutOrder();
-				break;
+				return checkoutOrder(message);
 
 			// Payment logic
 			case "payment/pay":
@@ -81,31 +83,6 @@ public class OrderQueryProcess extends QueryProcess {
 		return Collections.singletonList(result);
 	}
 
-	private QueryProcessResult sendMessageToBatchProcessingInStockService(Message message) throws Exception {
-		// TODO: this is just sample code for now
-		// TODO: this is never called
-		// TODO: this has not yet been tested, though I'm quite sure it should work
-		OrderState current = state.value();
-
-		if (current == null)
-			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
-
-		ObjectNode params = objectMapper.createObjectNode();
-		params.set(PARAM_PRODUCTS, current.getProductsAsJson(objectMapper));
-		params.put(PARAM_ORDER_ID, current.orderID);
-		params.put(PARAM_USER_ID, current.userID);
-
-		String targetRoute = "batch/count"; // count how many entries are available
-		String targetState = "batch:count";
-
-		// message will return to ORDER_IN_TOPIC (hardcoded), and to the route equal to message.input.route
-		return new QueryProcessResult.Redirect(
-				STOCK_IN_TOPIC,
-				targetRoute,
-				params,
-				targetState);
-	}
-
 	private QueryProcessResult paymentCancel(Message message) throws Exception {
 		OrderState current = state.value();
 
@@ -118,7 +95,7 @@ public class OrderQueryProcess extends QueryProcess {
 
 		ObjectNode params = message.params.deepCopy();
 		params.put(PARAM_USER_ID, current.userID);
-		params.put(PARAM_PRICE, current.countTotalItems());
+		params.put(PARAM_PRICE, current.getPrice());
 		return new QueryProcessResult.Redirect(
 				PAYMENT_IN_TOPIC,
 				message.state.route,
@@ -142,7 +119,7 @@ public class OrderQueryProcess extends QueryProcess {
 								STATE_PAYMENT_ORDER_NOT_EXISTS));
 
 			// TODO: should we check if all items exist?
-			long price = current.countTotalItems();
+			long price = current.getPrice();
 
 			ObjectNode params = message.params.deepCopy();
 			params.put(PARAM_USER_ID, current.userID);
@@ -302,9 +279,333 @@ public class OrderQueryProcess extends QueryProcess {
 		}
 	}
 
-	private QueryProcessResult checkoutOrder() throws Exception {
-		// TODO: implement
-		throw new ServiceException("Order checkout not yet implemented.");
+	public static final String STATE_CHECKOUT_SEND_PAYMENT = "send-payment";
+	public static final String STATE_CHECKOUT_SEND_STOCK = "send-stock";
+	public static final String STATE_CHECKOUT_REPLENISH_PAYMENT = "replenish-payment";
+	public static final String STATE_CHECKOUT_REPLENISH_STOCK = "replenish-stock";
+
+	private List<QueryProcessResult> checkoutOrder(Message message) throws Exception {
+		OrderState current = state.value();
+		ArrayList<QueryProcessResult> results = new ArrayList<>(2);
+
+		if (current == null)
+			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
+
+		if (current.isPaid)
+			throw new ServiceException("Order already paid.");
+
+		switch (current.checkoutStatus) {
+			case SUCCEEDED:
+				throw new ServiceException("Order already concluded.");
+			case INVALID:
+				throw new ServiceException("Invalid order state.");
+			case FAILED:
+				// fall-through - retry
+			case NOT_PROCESSED:
+				current.checkoutStatus = OrderCheckoutStatus.IN_PROGRESS;
+				current.checkoutProgress = OrderCheckoutProgress.NOT_PROCESSED;
+				// fall-through - process this checkout
+			case IN_PROGRESS: {
+				if (current.checkoutProgress == OrderCheckoutProgress.NOT_PROCESSED) {
+
+					// send two requests
+					QueryProcessResult stockRequest = sendStockSubtractRequest(current);
+					QueryProcessResult paymentRequest = sendCheckoutPaymentPayRequest(current, message);
+					results.add(stockRequest);
+					results.add(paymentRequest);
+
+					// update the current state
+					current.checkoutProgress = OrderCheckoutProgress.AWAITING_SEND_BOTH;
+					current.checkoutMessages = new ArrayList<>();
+					state.update(current);
+
+					// the first part is done.
+					break;
+				}
+
+				// message's state should be set at every step of the way - if not, yield an error
+				if (message.state.state == null)
+					throw new ServiceException.IllegalStateException(null);
+
+				// this switch updates the status of the state given its response
+				switch (message.state.state) {
+					case STATE_CHECKOUT_SEND_STOCK: { // this is the longest of all cases (in terms of LOC) as we need to mark what products to replenish
+						// retrieve a list of products processed
+						JsonNode products = message.params.get(PARAM_PRODUCTS);
+						Iterator<Map.Entry<String, JsonNode>> iterator = products.fields();
+
+						// these two booleans indicate whether any items has yielded a failure or an error
+						boolean isFailure = false;
+						boolean isError = false;
+
+						// build a map of items that need to be refunded
+						Map<String, Long> refunds = new HashMap<>();
+						while (iterator.hasNext()) {
+							// extract item status
+							Map.Entry<String, JsonNode> product = iterator.next();
+							String itemID = product.getKey();
+							JsonNode value = product.getValue();
+							int code = value.get(PARAM_STATE).asInt();
+							OperationResult batchResult = OperationResult.fromCode(code);
+
+							// process item given its status
+							if (batchResult == OperationResult.ERROR) {
+								// mark error
+								isError = true;
+								current.checkoutMessages.add(new OrderState.CheckoutMessage(OperationResult.ERROR, "Item does not exist: " + itemID));
+							} else if (batchResult == OperationResult.FAILURE) {
+								// mark failure
+								isFailure = true;
+								current.checkoutMessages.add(new OrderState.CheckoutMessage(OperationResult.FAILURE, "Not enough items in stock: " + itemID));
+							} else if (batchResult == OperationResult.SUCCESS) {
+								// this item might need to be refunded, so put it in the map
+								long amount = value.get(PARAM_AMOUNT).asLong();
+								refunds.put(itemID, amount);
+							} else {
+								throw new IllegalStateException("Unrecognised batch result.");
+							}
+						}
+
+						// update the current state
+						current.checkoutStock = refunds;
+						current.checkoutProgress = OrderCheckoutProgress.remove(current.checkoutProgress, OrderCheckoutProgress.AWAITING_SEND_STOCK);
+						if (isError || isFailure) {
+							current.checkoutProgress |= OrderCheckoutProgress.FAILED_STOCK;
+						} else {
+							current.checkoutProgress |= OrderCheckoutProgress.SUCCEEDED_STOCK;
+						}
+					}
+					break;
+
+					case STATE_CHECKOUT_SEND_PAYMENT: {
+						// extract operation result
+						int resultCode = message.params.get(PARAM_STATE).asInt();
+						OperationResult operationResult = OperationResult.fromCode(resultCode);
+
+						// update the current state
+						current.checkoutProgress = OrderCheckoutProgress.remove(current.checkoutProgress, OrderCheckoutProgress.AWAITING_SEND_PAYMENT);
+						if (operationResult == OperationResult.SUCCESS) {
+							current.checkoutProgress |= OrderCheckoutProgress.SUCCEEDED_PAYMENT;
+						} else {
+							current.checkoutProgress |= OrderCheckoutProgress.FAILED_PAYMENT;
+							if (operationResult == OperationResult.FAILURE) {
+								String msg = getTextField(message.params.get(PARAM_MESSAGE), "Insufficient funds.");
+								current.checkoutMessages.add(new OrderState.CheckoutMessage(operationResult, msg));
+							} else {
+								String msg = getTextField(message.params.get(PARAM_MESSAGE), "Unknown error - send payment.");
+								current.checkoutMessages.add(new OrderState.CheckoutMessage(operationResult, msg));
+							}
+						}
+					}
+					break;
+
+					case STATE_CHECKOUT_REPLENISH_PAYMENT: {
+						// extract operation result
+						int resultCode = message.params.get(PARAM_STATE).asInt();
+						OperationResult operationResult = OperationResult.fromCode(resultCode);
+
+						// update the current state
+						current.checkoutProgress = OrderCheckoutProgress.remove(current.checkoutProgress, OrderCheckoutProgress.AWAITING_REPLENISH_PAYMENT);
+						if (operationResult != OperationResult.SUCCESS) {
+							String msg = getTextField(message.params.get(PARAM_MESSAGE), "Unknown error - payment replenish.");
+							current.checkoutMessages.add(new OrderState.CheckoutMessage(operationResult, msg));
+						}
+					}
+					break;
+
+					case STATE_CHECKOUT_REPLENISH_STOCK: {
+						// retrieve a list of products to process
+						JsonNode products = message.params.get(PARAM_PRODUCTS);
+						Iterator<Map.Entry<String, JsonNode>> iterator = products.fields();
+						while (iterator.hasNext()) {
+							// extract item status
+							Map.Entry<String, JsonNode> product = iterator.next();
+							String itemID = product.getKey();
+							JsonNode value = product.getValue();
+							int code = value.get(PARAM_STATE).asInt();
+							OperationResult batchResult = OperationResult.fromCode(code);
+
+							// process item given its status
+							if (batchResult == OperationResult.ERROR) {
+								// mark error
+								current.checkoutMessages.add(new OrderState.CheckoutMessage(OperationResult.ERROR, "Error replenishing item: " + itemID));
+							} else if (batchResult == OperationResult.FAILURE) {
+								// mark failure
+								current.checkoutMessages.add(new OrderState.CheckoutMessage(OperationResult.FAILURE, "Failed to replenish item: " + itemID));
+							}
+						}
+
+						// update the current state
+						current.checkoutProgress = OrderCheckoutProgress.remove(current.checkoutProgress, OrderCheckoutProgress.AWAITING_REPLENISH_STOCK);
+					}
+					break;
+
+					default:
+						throw new ServiceException.IllegalStateException(message.state.state);
+				}
+
+				boolean replenishStockSent = OrderCheckoutProgress.contains(current.checkoutProgress, OrderCheckoutProgress.REPLENISH_STOCK_SENT);
+				boolean replenishPaymentSent = OrderCheckoutProgress.contains(current.checkoutProgress, OrderCheckoutProgress.REPLENISH_PAYMENT_SENT);
+				boolean failedStock = OrderCheckoutProgress.contains(current.checkoutProgress, OrderCheckoutProgress.FAILED_STOCK);
+				boolean failedPayment = OrderCheckoutProgress.contains(current.checkoutProgress, OrderCheckoutProgress.FAILED_PAYMENT);
+
+				// check if we should send replenish request to the stock service
+				if (!replenishStockSent && (failedStock || failedPayment)) {
+					// send replenish stock request
+					current.checkoutProgress |= OrderCheckoutProgress.AWAITING_REPLENISH_STOCK;
+					current.checkoutProgress |= OrderCheckoutProgress.REPLENISH_STOCK_SENT;
+					QueryProcessResult result = sendStockReplenishMessage(current);
+					results.add(result);
+				}
+
+				// check if we should send replenish request to the payment service
+				if (!replenishPaymentSent && (failedStock || failedPayment)) {
+					// send replenish payment request
+					current.checkoutProgress |= OrderCheckoutProgress.AWAITING_REPLENISH_PAYMENT;
+					current.checkoutProgress |= OrderCheckoutProgress.REPLENISH_PAYMENT_SENT;
+					QueryProcessResult result = sendCheckoutPaymentCancelRequest(current, message);
+					results.add(result);
+				}
+
+				// handle logic for continuing the process of checking-out the order
+				if (!OrderCheckoutProgress.isAwaitingAnything(current.checkoutProgress)) {
+					// we're done
+					QueryProcessResult result;
+					if (OrderCheckoutProgress.hasSucceeded(current.checkoutProgress)) {
+						result = sendCheckoutSuccessResponse(current);
+						clearCheckoutState(current, OrderCheckoutStatus.SUCCEEDED);
+					} else if (OrderCheckoutProgress.hasFailed(current.checkoutProgress)
+							&& OrderCheckoutProgress.hasSentBothReplenishRequests(current.checkoutProgress)) {
+						result = sendCheckoutFailureResponse(current, message);
+						clearCheckoutState(current, OrderCheckoutStatus.FAILED);
+					} else {
+						// this should not happen
+						clearCheckoutState(current, OrderCheckoutStatus.INVALID);
+						state.update(current);
+						throw new ServiceException("Invalid checkout state - not succeeded yet not failed.");
+					}
+					results.add(result);
+				} // end inner switch
+			}
+			break;
+			default:
+				throw new ServiceException("Unrecognised checkout order status.");
+		} // end outer switch
+
+		state.update(current);
+		return results;
+	}
+
+	private static String getTextField(JsonNode node, String defaultMessage) {
+		if (node == null || node.isNull())
+			return defaultMessage;
+		else
+			return node.asText();
+	}
+
+	private void clearCheckoutState(OrderState current, OrderCheckoutStatus status) throws Exception {
+		if (current == null)
+			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
+
+		current.checkoutStatus = status;
+		current.checkoutProgress = OrderCheckoutProgress.NOT_PROCESSED;
+		current.checkoutMessages = null;
+		current.checkoutStock = null;
+	}
+
+	private QueryProcessResult sendCheckoutSuccessResponse(OrderState current) throws Exception {
+		if (current == null)
+			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
+
+		return successResult(current, "Order successfully purchased.");
+	}
+
+	private QueryProcessResult sendCheckoutFailureResponse(OrderState current, Message message) throws Exception {
+		if (current == null)
+			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
+
+		ObjectNode params = message.params.deepCopy();
+		params.set("log", current.getChecoutMessagesAsJson(objectMapper));
+		current.fillJsonNode(params, objectMapper);
+
+		return new QueryProcessResult.Failure(
+				params,
+				"Order checkout failed");
+	}
+
+	private QueryProcessResult sendStockReplenishMessage(OrderState current) throws Exception {
+		if (current == null)
+			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
+
+		if (current.checkoutStock == null)
+			throw new ServiceException("Checkout stock not defined.");
+
+		ObjectNode params = objectMapper.createObjectNode();
+		params.set(PARAM_PRODUCTS, current.getCheckoutStockAsJson(objectMapper));
+		params.put(PARAM_ORDER_ID, current.orderID);
+		params.put(PARAM_USER_ID, current.userID);
+
+		String targetRoute = "batch/add"; // count how many entries are available
+		String targetState = "batch:add";
+
+		// message will return to ORDER_IN_TOPIC (hardcoded), and to the route equal to message.input.route
+		return new QueryProcessResult.Redirect(
+				STOCK_IN_TOPIC,
+				targetRoute,
+				params,
+				targetState);
+	}
+
+	private QueryProcessResult sendStockSubtractRequest(OrderState current) throws Exception {
+		if (current == null)
+			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
+
+		ObjectNode params = objectMapper.createObjectNode();
+		params.set(PARAM_PRODUCTS, current.getProductsAsJson(objectMapper));
+		params.put(PARAM_ORDER_ID, current.orderID);
+		params.put(PARAM_USER_ID, current.userID);
+
+		String targetRoute = "batch/subtract"; // count how many entries are available
+		String targetState = "batch:subtract";
+
+		// message will return to ORDER_IN_TOPIC (hardcoded), and to the route equal to message.input.route
+		return new QueryProcessResult.Redirect(
+				STOCK_IN_TOPIC,
+				targetRoute,
+				params,
+				targetState);
+	}
+
+	private QueryProcessResult sendCheckoutPaymentPayRequest(OrderState current, Message message) throws Exception {
+		if (current == null)
+			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
+
+		ObjectNode params = objectMapper.createObjectNode();
+		params.put(PARAM_ORDER_ID, current.orderID);
+		params.put(PARAM_USER_ID, current.userID);
+		params.put(PARAM_PRICE, current.getPrice());
+
+		return new QueryProcessResult.Redirect(
+				PAYMENT_IN_TOPIC,
+				message.state.route,
+				params,
+				"do-payment");
+	}
+
+	private QueryProcessResult sendCheckoutPaymentCancelRequest(OrderState current, Message message) throws Exception {
+		if (current == null)
+			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
+
+		ObjectNode params = objectMapper.createObjectNode();
+		params.put(PARAM_ORDER_ID, current.orderID);
+		params.put(PARAM_USER_ID, current.userID);
+		params.put(PARAM_PRICE, current.getPrice());
+
+		return new QueryProcessResult.Redirect(
+				PAYMENT_IN_TOPIC,
+				message.state.route,
+				params,
+				"cancel-payment");
 	}
 
 	private QueryProcessResult successResult(OrderState state, @Nullable String msg) {

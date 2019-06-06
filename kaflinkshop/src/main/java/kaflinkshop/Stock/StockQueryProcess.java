@@ -56,14 +56,20 @@ public class StockQueryProcess extends QueryProcess {
 				result = itemSubtract(message);
 				break;
 
+			// Order logic
+			case "orders/addItem":
+				result = orderAddItem(message);
+				break;
+
 			// Batch processing
 			case "batch/count":
 				result = batchCount(message);
 				break;
-
-			// Order logic
-			case "orders/addItem":
-				result = orderAddItem(message);
+			case "batch/subtract":
+				result = batchSubtractStock(message);
+				break;
+			case "batch/add":
+				result = batchAddStock(message);
 				break;
 
 			// Error route handler
@@ -74,12 +80,63 @@ public class StockQueryProcess extends QueryProcess {
 		return Collections.singletonList(result);
 	}
 
+	private QueryProcessResult batchAddStock(Message message) throws Exception {
+		StockState current = state.value();
+		long amount = message.params.get(PARAM_AMOUNT).asLong();
+
+		ObjectNode params = message.params.deepCopy();
+		ObjectNode pass = objectMapper.createObjectNode();
+		params.set(PARAM_BATCH_PASS, pass);
+
+		if (current == null || amount < 0) {
+			pass.put(PARAM_STATE, OperationResult.ERROR.getCode());
+		} else {
+			current.amount += amount;
+			state.update(current);
+			pass.put(PARAM_STATE, OperationResult.SUCCESS.getCode());
+		}
+
+		return new QueryProcessResult.Redirect(
+				STOCK_IN_TOPIC,
+				message.state.route,
+				params,
+				message.state.state);
+	}
+
+	private QueryProcessResult batchSubtractStock(Message message) throws Exception {
+		StockState current = state.value();
+		long amount = message.params.get(PARAM_AMOUNT).asLong();
+
+		ObjectNode params = message.params.deepCopy();
+		ObjectNode pass = objectMapper.createObjectNode();
+		params.set(PARAM_BATCH_PASS, pass);
+
+		if (current == null || amount < 0) {
+			pass.put(PARAM_STATE, OperationResult.ERROR.getCode());
+		} else if (current.amount >= amount) {
+			current.amount -= amount;
+			state.update(current);
+			pass.put(PARAM_STATE, OperationResult.SUCCESS.getCode());
+			pass.put(PARAM_AMOUNT, amount);
+		} else {
+			pass.put(PARAM_STATE, OperationResult.FAILURE.getCode());
+		}
+
+		return new QueryProcessResult.Redirect(
+				STOCK_IN_TOPIC,
+				message.state.route,
+				params,
+				message.state.state);
+	}
+
 	private QueryProcessResult batchCount(Message message) throws Exception {
 		StockState current = state.value();
 
 		long amount = current == null ? -1 : current.amount;
 		ObjectNode params = message.params.deepCopy();
-		params.put(PARAM_AMOUNT, amount);
+		ObjectNode pass = objectMapper.createObjectNode();
+		params.set(PARAM_BATCH_PASS, pass);
+		pass.put(PARAM_AMOUNT, amount);
 
 		return new QueryProcessResult.Redirect(
 				STOCK_IN_TOPIC,

@@ -2,6 +2,7 @@ package kaflinkshop.Stock;
 
 import kaflinkshop.Message;
 import org.apache.flink.api.common.functions.AggregateFunction;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ObjectNode;
 
@@ -34,7 +35,7 @@ public class BatchCollector implements AggregateFunction<Message, BatchCollector
 
 	static class BatchAccumulator {
 
-		public Map<String, Long> items = new HashMap<>();
+		public Map<String, JsonNode> items = new HashMap<>();
 		public Message message;
 
 		BatchAccumulator() {
@@ -42,7 +43,7 @@ public class BatchCollector implements AggregateFunction<Message, BatchCollector
 			this.message = null;
 		}
 
-		BatchAccumulator(Map<String, Long> items, Message message) {
+		BatchAccumulator(Map<String, JsonNode> items, Message message) {
 			this.items = items;
 			this.message = message;
 		}
@@ -60,9 +61,9 @@ public class BatchCollector implements AggregateFunction<Message, BatchCollector
 				accumulator.message = message;
 
 			String itemID = message.params.get(PARAM_ITEM_ID).asText();
-			long amount = message.params.get(PARAM_AMOUNT).asLong(); // -1 for non-existent
+			JsonNode pass = message.params.get(PARAM_BATCH_PASS);
 
-			accumulator.items.put(itemID, amount);
+			accumulator.items.put(itemID, pass);
 
 			return accumulator;
 		}
@@ -71,7 +72,7 @@ public class BatchCollector implements AggregateFunction<Message, BatchCollector
 			ObjectMapper objectMapper = new ObjectMapper();
 
 			ObjectNode products = objectMapper.createObjectNode();
-			this.items.forEach(products::put);
+			this.items.forEach(products::set);
 
 			ObjectNode params = objectMapper.createObjectNode();
 			params.put(PARAM_ORDER_ID, this.message.params.get(PARAM_ORDER_ID).asText());
@@ -87,7 +88,7 @@ public class BatchCollector implements AggregateFunction<Message, BatchCollector
 		}
 
 		static BatchAccumulator merge(BatchAccumulator a, BatchAccumulator b) {
-			HashMap<String, Long> merged = new HashMap<>();
+			HashMap<String, JsonNode> merged = new HashMap<>();
 			merged.putAll(a.items);
 			merged.putAll(b.items);
 			return new BatchAccumulator(merged, a.message);
