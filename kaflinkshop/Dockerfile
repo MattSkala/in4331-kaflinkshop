@@ -1,8 +1,11 @@
-FROM flink:1.8.0
-
+FROM maven:3.5-jdk-8 AS build  
 COPY . /app
 WORKDIR /app
-
-RUN apt-get update -y && apt-get install maven -y
 RUN mvn package
-CMD flink run /target/kaflinkshop-0.1.jar
+
+FROM flink:1.8.0
+#WORKDIR /app
+COPY --from=build /app/target/kaflinkshop-0.1.jar .
+# CMD flink run /app/target/kaflinkshop-0.1.jar
+
+CMD sh -c "/docker-entrypoint.sh jobmanager && flink run kaflinkshop-0.1.jar"

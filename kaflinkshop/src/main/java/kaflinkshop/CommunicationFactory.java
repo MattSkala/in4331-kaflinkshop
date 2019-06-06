@@ -1,5 +1,9 @@
 package kaflinkshop;
 
+import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer011;
+import org.apache.flink.streaming.util.serialization.KeyedSerializationSchema;
+
 public class CommunicationFactory {
 
 	public final static String API_VERSION = "api1";
@@ -42,7 +46,43 @@ public class CommunicationFactory {
 	public final static String PARAM_BATCH_PASS = "batch_pass";
 	public final static String PARAM_RETURN_STATE = "return_state";
 
-	public final static String KAFKA_DEFAULT_ADDRESS = "localhost:9092";
+	public final static String KAFKA_DEFAULT_ADDRESS = getKafkaHost() + ":9092";
 	public final static String ZOOKEEPER_DEFAULT_ADDRESS = "localhost:2181";
 
+	private static String getKafkaHost() {
+		String host = System.getenv("KAFKA_HOST");
+		if (host == null) {
+			return "kafka";
+		} else {
+			return host;
+		}
+	}
+
+
+    public static FlinkKafkaProducer011<Tuple2<String, String>> createProducer(
+            String topic, String kafkaAddress) {
+
+        return new FlinkKafkaProducer011<>(kafkaAddress,
+                topic, new KeyedSerializationSchema<Tuple2<String, String>>() {
+            @Override
+            public byte[] serializeKey(Tuple2<String, String> element) {
+                return null;
+            }
+
+            @Override
+            public byte[] serializeValue(Tuple2<String, String> element) {
+                return element.f1.getBytes();
+            }
+
+            @Override
+            public String getTargetTopic(Tuple2<String, String> element) {
+                System.out.println("Sending " + element.f1 + " to " + element.f0);
+                return element.f0;
+            }
+        });
+    }
+
+    public static Tuple2<String, String> createOutput(String topic, String output){
+        return new Tuple2<>(topic, output);
+    }
 }
