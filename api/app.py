@@ -3,6 +3,7 @@ from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
 import json
 import uuid
 import asyncio
+import os
 
 import resource
 soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
@@ -24,7 +25,8 @@ TOPIC_PAYMENT_OUTPUT = 'payment_out_' + SERVICE_ID
 OUTPUT_TOPICS = [TOPIC_USERS_OUTPUT, TOPIC_ORDERS_OUTPUT, TOPIC_STOCK_OUTPUT, TOPIC_PAYMENT_OUTPUT]
 
 # Kafka bootstrap server for both consumer and producer
-KAFKA_BOOTSTRAP_SERVER = 'localhost:9092'
+KAFKA_HOST = os.getenv('KAFKA_HOST', 'localhost')
+KAFKA_BOOTSTRAP_SERVER = KAFKA_HOST + ':9092'
 
 # web service ID, used by Flink
 WEB_SERVICE_ID = 'web'

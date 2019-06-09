@@ -1,5 +1,9 @@
 package kaflinkshop;
 
+import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer011;
+import org.apache.flink.streaming.util.serialization.KeyedSerializationSchema;
+
 public class CommunicationFactory {
 
 	public final static String API_VERSION = "api1";
@@ -42,7 +46,15 @@ public class CommunicationFactory {
 	public final static String PARAM_BATCH_PASS = "batch_pass";
 	public final static String PARAM_RETURN_STATE = "return_state";
 
-	public final static String KAFKA_DEFAULT_ADDRESS = "localhost:9092";
-	public final static String ZOOKEEPER_DEFAULT_ADDRESS = "localhost:2181";
+	public final static String KAFKA_DEFAULT_ADDRESS = getEnvOrDefault("KAFKA_HOST", "localhost") + ":9092";
+	public final static String ZOOKEEPER_DEFAULT_ADDRESS = getEnvOrDefault("ZOOKEEPER_HOST", "localhost") + ":2181";
 
+	private static String getEnvOrDefault(String name, String fallback) {
+		String host = System.getenv(name);
+		if (host == null) {
+			return fallback;
+		} else {
+			return host;
+		}
+	}
 }

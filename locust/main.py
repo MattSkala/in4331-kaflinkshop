@@ -3,7 +3,7 @@ import json
 import random
 import resource
 soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
+resource.setrlimit(resource.RLIMIT_NOFILE, (soft, hard))
 setUsers = set()
 setOrders = set()
 setItems = set()
