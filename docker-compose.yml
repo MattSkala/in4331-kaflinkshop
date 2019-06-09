@@ -1,0 +1,121 @@
+version: '3'
+services:
+  zookeeper:
+    image: wurstmeister/zookeeper
+    ports:
+      - "2181:2181"
+    hostname: zookeeper
+    logging:
+      driver: awslogs
+      options: 
+        awslogs-group: kaflinkshop
+        awslogs-region: us-east-2
+        awslogs-stream-prefix: zookeeper
+  kafka:
+    image: wurstmeister/kafka
+    ports:
+      - "9092:9092"
+    hostname: kafka
+    links:
+      - zookeeper
+    environment:
+      KAFKA_ADVERTISED_HOST_NAME: kafka
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: kaflinkshop
+        awslogs-region: us-east-2
+        awslogs-stream-prefix: kafka
+  jobmanager:
+    image: "flink:1.8.0"
+    expose: 
+      - "6123"      
+    ports:
+      - "8081:8081"
+    links:
+      - kafka
+    command: jobmanager
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=jobmanager
+      - KAFKA_HOST=kafka
+    logging:
+      driver: awslogs
+      options: 
+        awslogs-group: kaflinkshop
+        awslogs-region: us-east-2
+        awslogs-stream-prefix: jobmanager
+  taskmanager:
+    image: "flink:1.8.0"
+    expose: 
+      - "6121"
+      - "6122"
+    links:
+      - kafka
+      - jobmanager
+    command: taskmanager
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=jobmanager
+      - KAFKA_HOST=kafka
+      - ZOOKEEPER_HOST=zookeeper
+    logging:
+      driver: awslogs
+      options: 
+        awslogs-group: kaflinkshop
+        awslogs-region: us-east-2
+        awslogs-stream-prefix: taskmanager
+  taskmanager_2:
+    image: "flink:1.8.0"
+    expose: 
+      - "6121"
+      - "6122"
+    links:
+      - kafka
+      - jobmanager
+    command: taskmanager
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=jobmanager
+      - KAFKA_HOST=kafka
+      - ZOOKEEPER_HOST=zookeeper
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: kaflinkshop
+        awslogs-region: us-east-2
+        awslogs-stream-prefix: taskmanager
+  taskmanager_3:
+    image: "flink:1.8.0"
+    expose: 
+      - "6121"
+      - "6122"
+    links:
+      - kafka
+      - jobmanager
+    command: taskmanager
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=jobmanager
+      - KAFKA_HOST=kafka
+      - ZOOKEEPER_HOST=zookeeper
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: kaflinkshop
+        awslogs-region: us-east-2
+        awslogs-stream-prefix: taskmanager
+  api:
+    build: api
+    image: 804992950117.dkr.ecr.us-east-2.amazonaws.com/kaflinkshop-api
+    ports:
+      - "5000:5000"
+      - "8080:8080"    
+    links:
+      - kafka
+      - jobmanager
+    environment:
+      - KAFKA_HOST=kafka
+    logging:
+      driver: awslogs
+      options: 
+        awslogs-group: kaflinkshop
+        awslogs-region: us-east-2
+        awslogs-stream-prefix: api

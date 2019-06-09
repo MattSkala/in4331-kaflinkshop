@@ -1,0 +1,18 @@
+version: 1
+task_definition:
+  services:
+    kafka:
+      cpu_shares: 10
+      mem_limit: 524288000
+    jobmanager:
+      cpu_shares: 10
+      mem_limit: 524288000
+    taskmanager:
+      cpu_shares: 10
+      mem_limit: 524288000
+    api:
+      cpu_shares: 10
+      mem_limit: 524288000
+    flinkjobs:
+      cpu_shares: 10
+      mem_limit: 524288000
