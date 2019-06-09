@@ -10,6 +10,12 @@ task_definition:
     taskmanager:
       cpu_shares: 10
       mem_limit: 524288000
+    taskmanager_2:
+      cpu_shares: 10
+      mem_limit: 524288000
+    taskmanager_3:
+      cpu_shares: 10
+      mem_limit: 524288000
     api:
       cpu_shares: 10
       mem_limit: 524288000

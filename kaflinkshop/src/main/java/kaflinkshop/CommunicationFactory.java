@@ -46,10 +46,19 @@ public class CommunicationFactory {
 	public final static String PARAM_BATCH_PASS = "batch_pass";
 	public final static String PARAM_RETURN_STATE = "return_state";
 
-	public final static String KAFKA_DEFAULT_ADDRESS = System.getenv("KAFKA_HOST") + ":9092";
-	public final static String ZOOKEEPER_DEFAULT_ADDRESS = System.getenv("ZOOKEEPER_HOST") + ":2181";
+	public final static String KAFKA_DEFAULT_ADDRESS = getEnvOrDefault("KAFKA_HOST", "127.0.0.1") + ":9092";
+	public final static String ZOOKEEPER_DEFAULT_ADDRESS = getEnvOrDefault("ZOOKEEPER_HOST", "127.0.0.1") + ":2181";
 
-    public static FlinkKafkaProducer011<Tuple2<String, String>> createProducer(
+	private static String getEnvOrDefault(String name, String fallback) {
+		String host = System.getenv(name);
+		if (host == null) {
+			return fallback;
+		} else {
+			return host;
+		}
+	}
+
+	public static FlinkKafkaProducer011<Tuple2<String, String>> createProducer(
             String topic, String kafkaAddress) {
 
         return new FlinkKafkaProducer011<>(kafkaAddress,

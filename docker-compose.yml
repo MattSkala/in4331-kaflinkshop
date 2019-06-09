@@ -7,7 +7,7 @@ services:
     hostname: zookeeper
     logging:
       driver: awslogs
-      options: 
+      options:
         awslogs-group: kaflinkshop
         awslogs-region: us-east-2
         awslogs-stream-prefix: zookeeper
@@ -29,19 +29,21 @@ services:
         awslogs-stream-prefix: kafka
   jobmanager:
     image: "flink:1.8.0"
+    hostname: jobmanager
+    links:
+      - kafka
     expose: 
       - "6123"      
     ports:
       - "8081:8081"
-    links:
-      - kafka
     command: jobmanager
     environment:
       - JOB_MANAGER_RPC_ADDRESS=jobmanager
       - KAFKA_HOST=kafka
+      - ZOOKEEPER_HOST=zookeeper
     logging:
       driver: awslogs
-      options: 
+      options:
         awslogs-group: kaflinkshop
         awslogs-region: us-east-2
         awslogs-stream-prefix: jobmanager
@@ -60,7 +62,7 @@ services:
       - ZOOKEEPER_HOST=zookeeper
     logging:
       driver: awslogs
-      options: 
+      options:
         awslogs-group: kaflinkshop
         awslogs-region: us-east-2
         awslogs-stream-prefix: taskmanager
@@ -105,17 +107,16 @@ services:
   api:
     build: api
     image: 804992950117.dkr.ecr.us-east-2.amazonaws.com/kaflinkshop-api
-    ports:
-      - "5000:5000"
-      - "8080:8080"    
     links:
       - kafka
-      - jobmanager
+    ports:
+      - "5000:5000"
+      - "8080:8080"
     environment:
       - KAFKA_HOST=kafka
     logging:
       driver: awslogs
-      options: 
+      options:
         awslogs-group: kaflinkshop
         awslogs-region: us-east-2
         awslogs-stream-prefix: api
