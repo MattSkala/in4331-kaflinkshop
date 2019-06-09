@@ -4,7 +4,9 @@ import json
 import uuid
 import asyncio
 
-
+import resource
+soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
 # distinguishes between Flink jobs and HTTP server services
 SERVICE_ID = 'api1'
 
@@ -24,6 +26,8 @@ OUTPUT_TOPICS = [TOPIC_USERS_OUTPUT, TOPIC_ORDERS_OUTPUT, TOPIC_STOCK_OUTPUT, TO
 # Kafka bootstrap server for both consumer and producer
 KAFKA_BOOTSTRAP_SERVER = 'localhost:9092'
 
+# web service ID, used by Flink
+WEB_SERVICE_ID = 'web'
 
 # request timeout in seconds
 TIMEOUT = 60.0
@@ -47,24 +51,27 @@ async def cleanup_kafka_producer(app):
 
 async def listen_kafka_consumer(consumer):
     async for msg in consumer:
-        print('received response: ' + str(msg.value))
+        # print('received response: ' + str(msg.value))
 
         try:
             response = json.loads(msg.value)
 
-            request_id = response['request_id']
+            request_id = response['input']['request_id']
 
             if (request_id in requests):
-                print('response delivered to request #' + str(request_id))
+                # print('response delivered to request #' + str(request_id))
                 try:
                     requests[request_id].set_result(response)
                 except:
-                    print('The user cancelled the request')
+                    pass
+                    # print('The user cancelled the request')
                 del requests[request_id]
             else:
-                print('no matching request found')
+                pass
+                # print('no matching request found')
         except json.decoder.JSONDecodeError:
-            print('parsing json failed')
+            pass
+            # print('parsing json failed')
 
 async def start_kafka_consumer(app):
     print('starting Kafka consumer')
@@ -80,13 +87,28 @@ async def cleanup_kafka_consumer(app):
     print('stopping Kafka consumer')
     await app['consumer'].stop()
 
+def format_request(request_id, topic, route, params):
+    return {
+        'input': {
+            'request_id': request_id,
+            'consumer': topic,
+            'route': route,
+            'params': params,
+        },
+        'params': params,
+        'state': {
+            'route': route,
+            'sender': WEB_SERVICE_ID,
+            'state': None, # do not remove
+        }
+    }
 
 # Assigns a unique request ID and sends the request to the provided topic
 # Returns a future that will return the response or times out
-async def send_request(app, topic, request):
+async def send_request(app, topic, route, params):
     # generate a UUID to identify a request
     request_id = str(uuid.uuid1())
-    request['request_id'] = request_id
+    request = format_request(request_id, topic, route, params)
 
     # create a Future that will receive the response
     loop = asyncio.get_running_loop()
@@ -98,12 +120,12 @@ async def send_request(app, topic, request):
 
     # set request timeout
     try:
-        print('sending request #' + request_id + ' ' + str(request))
+        # print('sending request #' + request_id + ' ' + str(request))
         response = await asyncio.wait_for(fut, timeout=TIMEOUT)
-        del response['request_id']
+        del response['input']['request_id']
         return response
     except asyncio.TimeoutError:
-        print('request #' + request_id + ' timed out')
+        # print('request #' + request_id + ' timed out')
         del requests[request_id]
         raise
 
@@ -114,11 +136,7 @@ async def hello(request):
 
 def route_handler(route, input_topic, output_topic):
     async def handle(request):
-        response = await send_request(request.app, input_topic, {
-            'sink': output_topic,
-            'route': route,
-            'params': dict(request.match_info)
-        })
+        response = await send_request(request.app, input_topic, route, dict(request.match_info))
 
         return web.json_response(response)
 
@@ -153,25 +171,25 @@ app.router.add_post('/orders/addItem/{order_id}/{item_id}',
     route_handler('orders/addItem', TOPIC_ORDERS_INPUT, TOPIC_ORDERS_OUTPUT))
 app.router.add_delete('/orders/removeItem/{order_id}/{item_id}',
     route_handler('orders/removeItem', TOPIC_ORDERS_INPUT, TOPIC_ORDERS_OUTPUT))
-app.router.add_post('/orders/checkout/{order_id}/{item_id}',
+app.router.add_post('/orders/checkout/{order_id}',
     route_handler('orders/checkout', TOPIC_ORDERS_INPUT, TOPIC_ORDERS_OUTPUT))
 
 # Stock Service
 app.router.add_get('/stock/availability/{item_id}',
     route_handler('stock/availability', TOPIC_STOCK_INPUT, TOPIC_STOCK_OUTPUT))
-app.router.add_post('/stock/subtract/{item_id}/{number}',
+app.router.add_post('/stock/subtract/{item_id}/{amount}',
     route_handler('stock/subtract', TOPIC_STOCK_INPUT, TOPIC_STOCK_OUTPUT))
-app.router.add_post('/stock/add/{item_id}/{number}',
+app.router.add_post('/stock/add/{item_id}/{amount}',
     route_handler('stock/add', TOPIC_STOCK_INPUT, TOPIC_STOCK_OUTPUT))
 app.router.add_post('/stock/item/create',
     route_handler('stock/item/create', TOPIC_STOCK_INPUT, TOPIC_STOCK_OUTPUT))
 
 # Payment Service
-app.router.add_post('/payment/pay/{user_id}/{order_id}',
+app.router.add_post('/payment/pay/{order_id}',
     route_handler('payment/pay', TOPIC_PAYMENT_INPUT, TOPIC_PAYMENT_OUTPUT))
-app.router.add_post('/payment/cancelPayment/{user_id}/{order_id}',
+app.router.add_post('/payment/cancelPayment/{order_id}',
     route_handler('payment/cancelPayment', TOPIC_PAYMENT_INPUT, TOPIC_PAYMENT_OUTPUT))
-app.router.add_get('/payment/status/{user_id}/{order_id}',
+app.router.add_get('/payment/status/{order_id}',
     route_handler('payment/status', TOPIC_PAYMENT_INPUT, TOPIC_PAYMENT_OUTPUT))
 
 # https://aiohttp.readthedocs.io/en/stable/web_advanced.html#background-tasks

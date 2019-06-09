@@ -1,4 +1,4 @@
-package kaflinkshop;
+package kaflinkshop.Payment;
 
 public enum PaymentStatus {
 
@@ -6,6 +6,7 @@ public enum PaymentStatus {
 	PAID(1),
 	FAILED(2),
 	CANCELLED(3),
+	PROCESSING(4),
 
 	;
 
