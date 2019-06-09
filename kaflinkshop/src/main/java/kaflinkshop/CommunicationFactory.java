@@ -46,8 +46,8 @@ public class CommunicationFactory {
 	public final static String PARAM_BATCH_PASS = "batch_pass";
 	public final static String PARAM_RETURN_STATE = "return_state";
 
-	public final static String KAFKA_DEFAULT_ADDRESS = getEnvOrDefault("KAFKA_HOST", "127.0.0.1") + ":9092";
-	public final static String ZOOKEEPER_DEFAULT_ADDRESS = getEnvOrDefault("ZOOKEEPER_HOST", "127.0.0.1") + ":2181";
+	public final static String KAFKA_DEFAULT_ADDRESS = getEnvOrDefault("KAFKA_HOST", "localhost") + ":9092";
+	public final static String ZOOKEEPER_DEFAULT_ADDRESS = getEnvOrDefault("ZOOKEEPER_HOST", "localhost") + ":2181";
 
 	private static String getEnvOrDefault(String name, String fallback) {
 		String host = System.getenv(name);
@@ -57,31 +57,4 @@ public class CommunicationFactory {
 			return host;
 		}
 	}
-
-	public static FlinkKafkaProducer011<Tuple2<String, String>> createProducer(
-            String topic, String kafkaAddress) {
-
-        return new FlinkKafkaProducer011<>(kafkaAddress,
-                topic, new KeyedSerializationSchema<Tuple2<String, String>>() {
-            @Override
-            public byte[] serializeKey(Tuple2<String, String> element) {
-                return null;
-            }
-
-            @Override
-            public byte[] serializeValue(Tuple2<String, String> element) {
-                return element.f1.getBytes();
-            }
-
-            @Override
-            public String getTargetTopic(Tuple2<String, String> element) {
-                System.out.println("Sending " + element.f1 + " to " + element.f0);
-                return element.f0;
-            }
-        });
-    }
-
-    public static Tuple2<String, String> createOutput(String topic, String output){
-        return new Tuple2<>(topic, output);
-    }
 }

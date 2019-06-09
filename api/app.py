@@ -25,7 +25,7 @@ TOPIC_PAYMENT_OUTPUT = 'payment_out_' + SERVICE_ID
 OUTPUT_TOPICS = [TOPIC_USERS_OUTPUT, TOPIC_ORDERS_OUTPUT, TOPIC_STOCK_OUTPUT, TOPIC_PAYMENT_OUTPUT]
 
 # Kafka bootstrap server for both consumer and producer
-KAFKA_HOST = os.getenv('KAFKA_HOST', 'kafka')
+KAFKA_HOST = os.getenv('KAFKA_HOST', 'localhost')
 KAFKA_BOOTSTRAP_SERVER = KAFKA_HOST + ':9092'
 
 # web service ID, used by Flink
