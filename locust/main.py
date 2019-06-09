@@ -76,7 +76,7 @@ class Webshop(TaskSet):
 
 
     ### Order Tasks
-    @task(4)
+    @task(6)
     def createOrder(self):
         if len(setUsers) > 0:
             user_id = random.choice(list(setUsers))
@@ -107,17 +107,7 @@ class Webshop(TaskSet):
 
             assert order_id not in user_orders
 
-    @task(2)
-    def addItemToOrderRoutine(self):
-        if (len(setOrders) > 0) and (len(setItems) > 0):
-            order_id = random.choice(list(setOrders))
-            item_id = random.choice(list(setItems))
-            response = self.client.post("/orders/addItem/"+order_id+"/" + item_id, name="/orders/addItem/{order_id}/{item_id}")
-            data = json.loads(response.text)
-
-            assert item_id in data['result']['params']['products']
-
-    @task(2)
+    @task(20)
     def addItemToOrderRoutine(self):
         if (len(setOrders) > 0) and (len(setItems) > 0):
             order_id = random.choice(list(setOrders))
@@ -146,14 +136,21 @@ class Webshop(TaskSet):
                 data = json.loads(response.text)
                 assert item_id not in data['result']['params']['products']
 
-    # Not implemented yet
-    # @task(1)
+    @task(1)
     def orderCheckout(self):
-        if (len(setOrders) > 0):
+        if (len(setOrders) > 0) & (len(setItems) > 0):
             order_id = random.choice(list(setOrders))
+            item_id = random.choice(list(setItems))
             setOrders.remove(order_id)
+
+            plus_amount = 10
+            ## Make sure there is something to checkout
+            response = self.client.post("/orders/addItem/"+order_id+"/" + item_id, name="/orders/addItem/{order_id}/{item_id}")
+            response = self.client.post("/stock/add/" + item_id + "/" +str(plus_amount), name="/stock/add/{item_id}/{number}")
+
             response = self.client.post("/orders/checkout/" + order_id, name="/orders/checkout/{order_id}")
             data = json.loads(response.text)
+            print(data)
             assert data['result']['result'] == 'success'
 
 
