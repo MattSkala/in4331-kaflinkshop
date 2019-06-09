@@ -1,10 +1,15 @@
 from locust import Locust, HttpLocust, TaskSet, task
 import json
 import random
-
+import resource
+soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
 setUsers = set()
 setOrders = set()
+setItems = set()
+
 class Webshop(TaskSet):
+    ### User Tasks
     @task(1)
     def index(self):
         self.client.get("/")
@@ -13,14 +18,8 @@ class Webshop(TaskSet):
     def createUser(self):
         response = self.client.post("/users/create")
         data = json.loads(response.text)
-        print("User id: " + data['result']['params']['user_id'])
         user_id = data['result']['params']['user_id']
         setUsers.add(user_id)
-
-    @task(3)
-    def createOrder(self):
-        if len(setUsers) > 0:
-            print("Creating order for: " +     random.choice(list(setUsers)))
 
     @task(1)
     def removeUser(self):
@@ -51,17 +50,43 @@ class Webshop(TaskSet):
             new_credits = int(data['result']['params']['balance'])
             assert (new_credits - credits) == (plus_amount - min_amount)
 
+    ### Stock tasks
+    @task(10)
+    def createItem(self):
+        response = self.client.post("/stock/item/create", name="/stock/item/create")
+        data = json.loads(response.text)
+        item_id = data['result']['params']['item_id']
+        setItems.add(item_id)
+
     @task(5)
+    def itemRoutine(self):
+        if len(setItems) > 0:
+            item_id = random.choice(list(setItems))
+            response = self.client.get("/stock/availability/" + item_id, name="/stock/availability/{item_id}")
+            data = json.loads(response.text)
+            credits = int(data['result']['params']['amount'])
+            plus_amount = 20
+            min_amount = 12
+            response = self.client.post("/stock/add/" + item_id + "/" +str(plus_amount), name="/stock/add/{item_id}/{number}")
+            response = self.client.post("/stock/subtract/" + item_id + "/" +str(min_amount), name="/stock/subtract/{item_id}/{number}")
+
+            data = json.loads(response.text)
+            new_credits = int(data['result']['params']['amount'])
+            assert (new_credits - credits) == (plus_amount - min_amount)
+
+
+    ### Order Tasks
+    @task(4)
     def createOrder(self):
         if len(setUsers) > 0:
             user_id = random.choice(list(setUsers))
             response = self.client.post("/orders/create/" + user_id, name="/orders/create/{user_id}")
             data = json.loads(response.text)
-            print("Order id: " + data['result']['params']['order_id'])
+            # print("Order id: " + data['result']['params']['order_id'])
             order_id = data['result']['params']['order_id']
             setOrders.add(order_id)
 
-    @task(5)
+    @task(4)
     def removeOrderRoutine(self):
         if len(setOrders) > 0:
             order_id = random.choice(list(setOrders))
@@ -81,6 +106,17 @@ class Webshop(TaskSet):
             user_orders = data['result']['params']['orders']
 
             assert order_id not in user_orders
+
+    @task(2)
+    def addItemToOrderRoutine(self):
+        if (len(setOrders) > 0) and (len(setItems) > 0):
+            order_id = random.choice(list(setOrders))
+            item_id = random.choice(list(setItems))
+            response = self.client.post("/orders/addItem/"+order_id+"/" + item_id, name="/orders/addItem/{order_id}/{item_id}")
+            data = json.loads(response.text)
+
+            assert item_id in data['result']['params']['products']
+
 
 class WebsiteUser(HttpLocust):
     task_set = Webshop

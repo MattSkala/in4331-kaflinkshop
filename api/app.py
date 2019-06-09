@@ -4,7 +4,9 @@ import json
 import uuid
 import asyncio
 
-
+import resource
+soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
 # distinguishes between Flink jobs and HTTP server services
 SERVICE_ID = 'api1'
 
@@ -49,7 +51,7 @@ async def cleanup_kafka_producer(app):
 
 async def listen_kafka_consumer(consumer):
     async for msg in consumer:
-        print('received response: ' + str(msg.value))
+        # print('received response: ' + str(msg.value))
 
         try:
             response = json.loads(msg.value)
@@ -57,16 +59,19 @@ async def listen_kafka_consumer(consumer):
             request_id = response['input']['request_id']
 
             if (request_id in requests):
-                print('response delivered to request #' + str(request_id))
+                # print('response delivered to request #' + str(request_id))
                 try:
                     requests[request_id].set_result(response)
                 except:
-                    print('The user cancelled the request')
+                    pass
+                    # print('The user cancelled the request')
                 del requests[request_id]
             else:
-                print('no matching request found')
+                pass
+                # print('no matching request found')
         except json.decoder.JSONDecodeError:
-            print('parsing json failed')
+            pass
+            # print('parsing json failed')
 
 async def start_kafka_consumer(app):
     print('starting Kafka consumer')
@@ -115,12 +120,12 @@ async def send_request(app, topic, route, params):
 
     # set request timeout
     try:
-        print('sending request #' + request_id + ' ' + str(request))
+        # print('sending request #' + request_id + ' ' + str(request))
         response = await asyncio.wait_for(fut, timeout=TIMEOUT)
         del response['input']['request_id']
         return response
     except asyncio.TimeoutError:
-        print('request #' + request_id + ' timed out')
+        # print('request #' + request_id + ' timed out')
         del requests[request_id]
         raise
 
