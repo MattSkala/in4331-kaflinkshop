@@ -117,6 +117,46 @@ class Webshop(TaskSet):
 
             assert item_id in data['result']['params']['products']
 
+    @task(2)
+    def addItemToOrderRoutine(self):
+        if (len(setOrders) > 0) and (len(setItems) > 0):
+            order_id = random.choice(list(setOrders))
+            item_id = random.choice(list(setItems))
+            response = self.client.post("/orders/addItem/"+order_id+"/" + item_id, name="/orders/addItem/{order_id}/{item_id}")
+            data = json.loads(response.text)
+
+            assert item_id in data['result']['params']['products']
+
+    @task(2)
+    def removeItemFromOrderRoutine(self):
+        if (len(setOrders) > 0):
+            order_id = random.choice(list(setOrders))
+            response = self.client.get("/orders/find/" + order_id, name="/orders/find/{order_id}")
+            data = json.loads(response.text)
+
+            items = list(data['result']['params']['products'])
+
+            if len(items) > 0:
+                item_id = random.choice(items)
+                print(item_id)
+                response = self.client.delete("/orders/removeItem/"+order_id+"/" + item_id, name="/orders/removeItem/{order_id}/{item_id}")
+
+
+                response = self.client.get("/orders/find/" + order_id, name="/orders/find/{order_id}")
+                data = json.loads(response.text)
+                assert item_id not in data['result']['params']['products']
+
+    # Not implemented yet
+    # @task(1)
+    def orderCheckout(self):
+        if (len(setOrders) > 0):
+            order_id = random.choice(list(setOrders))
+            setOrders.remove(order_id)
+            response = self.client.post("/orders/checkout/" + order_id, name="/orders/checkout/{order_id}")
+            data = json.loads(response.text)
+            assert data['result']['result'] == 'success'
+
+
 
 class WebsiteUser(HttpLocust):
     task_set = Webshop
