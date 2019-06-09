@@ -9,7 +9,9 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMap
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ObjectNode;
 
 import javax.annotation.Nullable;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 
 import static kaflinkshop.CommunicationFactory.*;
@@ -50,8 +52,7 @@ public class UserQueryProcess extends QueryProcess {
 				result = createUser(userID);
 				break;
 			case "users/remove":
-				result = removeUser();
-				break;
+				return removeUser();
 			case "users/credit":
 				result = getCredits();
 				break;
@@ -321,15 +322,31 @@ public class UserQueryProcess extends QueryProcess {
 		return successResult(current, "User created.");
 	}
 
-	private QueryProcessResult removeUser() throws Exception {
+	private List<QueryProcessResult> removeUser() throws Exception {
 		UserState current = state.value();
 
 		if (current == null)
 			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
 
+		List<QueryProcessResult> out_messages = new ArrayList<>();
+
+		Iterator<String> orderIterator = current.orders.iterator();
+
+		while(orderIterator.hasNext()){
+			String orderId = orderIterator.next();
+
+			ObjectNode params = objectMapper.createObjectNode();
+			params.put(PARAM_ORDER_ID, orderId);
+			out_messages.add(new QueryProcessResult.Redirect(
+					ORDER_IN_TOPIC,
+					"orders/remove",
+					params,
+					STATE_USER_ORDER_REMOVED));
+		}
 		state.update(null);
 
-		return new QueryProcessResult.Success("User removed.");
+		out_messages.add(new QueryProcessResult.Success("User removed."));
+		return out_messages;
 	}
 
 	private QueryProcessResult getCredits() throws Exception {
