@@ -19,6 +19,7 @@ public class OrderState {
 	public HashMap<String, Integer> products;
 	public boolean userChecked;
 	public boolean isPaid;
+	// checkout state
 	public OrderCheckoutStatus checkoutStatus = OrderCheckoutStatus.NOT_PROCESSED;
 	public int checkoutProgress = OrderCheckoutProgress.NOT_PROCESSED;
 	public List<CheckoutMessage> checkoutMessages;
@@ -62,16 +63,8 @@ public class OrderState {
 		return products;
 	}
 
-	public JsonNode getChecoutMessagesAsJson(ObjectMapper objectMapper) {
-		ArrayNode array = objectMapper.createArrayNode();
-		for (CheckoutMessage message : this.checkoutMessages) {
-			ObjectNode node = objectMapper.createObjectNode();
-			node.put("message", message.message);
-			node.put("status", message.result.toString());
-			node.put("status_code", message.result.getCode());
-			array.add(node);
-		}
-		return array;
+	public JsonNode getCheckoutMessagesAsJson(ObjectMapper objectMapper) {
+		return CheckoutMessage.getMessagesAsJson(objectMapper, this.checkoutMessages);
 	}
 
 	public long getPrice() {
@@ -81,6 +74,9 @@ public class OrderState {
 		return amount;
 	}
 
+	public boolean canModify() {
+		return userChecked && !isPaid && (this.checkoutStatus == OrderCheckoutStatus.NOT_PROCESSED || this.checkoutStatus == OrderCheckoutStatus.FAILED);
+	}
 
 	public static class CheckoutMessage {
 
@@ -90,6 +86,18 @@ public class OrderState {
 		public CheckoutMessage(OperationResult result, String message) {
 			this.result = result;
 			this.message = message;
+		}
+
+		public static JsonNode getMessagesAsJson(ObjectMapper objectMapper, List<CheckoutMessage> checkoutMessages) {
+			ArrayNode array = objectMapper.createArrayNode();
+			for (CheckoutMessage message : checkoutMessages) {
+				ObjectNode node = objectMapper.createObjectNode();
+				node.put("message", message.message);
+				node.put("status", message.result.toString());
+				node.put("status_code", message.result.getCode());
+				array.add(node);
+			}
+			return array;
 		}
 
 	}

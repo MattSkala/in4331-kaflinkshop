@@ -40,6 +40,7 @@ public class CommunicationFactory {
 	public final static String PARAM_BATCH_ID = "batch_id";
 	public final static String PARAM_BATCH_COUNT = "batch_count";
 	public final static String PARAM_BATCH_PASS = "batch_pass";
+	public final static String PARAM_RETURN_STATE = "return_state";
 
 	public final static String KAFKA_DEFAULT_ADDRESS = "localhost:9092";
 	public final static String ZOOKEEPER_DEFAULT_ADDRESS = "localhost:2181";

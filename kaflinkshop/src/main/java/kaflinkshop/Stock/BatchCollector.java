@@ -79,11 +79,15 @@ public class BatchCollector implements AggregateFunction<Message, BatchCollector
 			params.put(PARAM_USER_ID, this.message.params.get(PARAM_USER_ID).asText());
 			params.set(PARAM_PRODUCTS, products);
 
+			String state = this.message.state.state;
+			if (this.message.params.has(PARAM_RETURN_STATE))
+				state = this.message.params.get(PARAM_RETURN_STATE).asText();
+
 			return Message.redirect(
 					this.message,
 					SERVICE_STOCK,
 					this.message.input.route,
-					this.message.state.state,
+					state,
 					params);
 		}
 

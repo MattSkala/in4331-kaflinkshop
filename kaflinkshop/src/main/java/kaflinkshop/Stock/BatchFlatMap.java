@@ -27,6 +27,7 @@ public class BatchFlatMap implements FlatMapFunction<Message, Message> {
 		if (!message.params.has(PARAM_USER_ID))
 			throw new ServiceException("User ID is expected to exist.");
 
+		String returnState = message.params.get(PARAM_RETURN_STATE).asText();
 		String orderID = message.params.get(PARAM_ORDER_ID).asText();
 		String userID = message.params.get(PARAM_USER_ID).asText();
 		String batchID = UUID.randomUUID().toString();
@@ -55,6 +56,7 @@ public class BatchFlatMap implements FlatMapFunction<Message, Message> {
 			params.put(PARAM_ORDER_ID, orderID);
 			params.put(PARAM_BATCH_ID, batchID);
 			params.put(PARAM_BATCH_COUNT, count);
+			params.put(PARAM_RETURN_STATE, returnState);
 
 			Message redirect = Message.redirect(
 					message,

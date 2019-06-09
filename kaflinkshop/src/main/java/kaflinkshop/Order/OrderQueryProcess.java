@@ -1,16 +1,12 @@
 package kaflinkshop.Order;
 
-import com.esotericsoftware.kryo.serializers.DefaultSerializers;
-import jdk.nashorn.internal.ir.ReturnNode;
 import kaflinkshop.*;
-import kaflinkshop.OperationResult;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ObjectNode;
-import sun.util.resources.cldr.tn.CurrencyNames_tn;
 
 import javax.annotation.Nullable;
 import java.util.*;
@@ -25,6 +21,10 @@ public class OrderQueryProcess extends QueryProcess {
 	public static final String STATE_USER_ORDER_ADDED = "user-order-added";
 	public static final String STATE_ITEM_EXISTS = "item-exists";
 	public static final String STATE_ITEM_NOT_EXISTS = "no-item";
+	public static final String STATE_CHECKOUT_SEND_PAYMENT = "send-payment";
+	public static final String STATE_CHECKOUT_SEND_STOCK = "send-stock";
+	public static final String STATE_CHECKOUT_REPLENISH_PAYMENT = "replenish-payment";
+	public static final String STATE_CHECKOUT_REPLENISH_STOCK = "replenish-stock";
 	public static final String ENTITY_NAME = "order";
 
 	/**
@@ -119,6 +119,7 @@ public class OrderQueryProcess extends QueryProcess {
 								STATE_PAYMENT_ORDER_NOT_EXISTS));
 
 			// TODO: should we check if all items exist?
+			// nah, not here, this gets checked when orders/checkout is called
 			long price = current.getPrice();
 
 			ObjectNode params = message.params.deepCopy();
@@ -200,8 +201,8 @@ public class OrderQueryProcess extends QueryProcess {
 		if (current == null)
 			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
 
-		if (current.isPaid)
-			throw new ServiceException("Cannot remove order that has already been paid.");
+		if (current.isPaid || current.checkoutStatus != OrderCheckoutStatus.NOT_PROCESSED)
+			throw new ServiceException("Cannot remove order.");
 
 		if (message.state.state == null) { // initiate order removal process
 			ObjectNode newParams = message.params.deepCopy();
@@ -230,8 +231,8 @@ public class OrderQueryProcess extends QueryProcess {
 		if (current == null)
 			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
 
-		if (current.isPaid)
-			throw new ServiceException("Cannot modify an order that has already been paid.");
+		if (!current.canModify())
+			throw new ServiceException("Cannot modify order.");
 
 		if (message.state.state == null) {
 			// initiate item the process of adding an item
@@ -266,8 +267,8 @@ public class OrderQueryProcess extends QueryProcess {
 		if (current == null)
 			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
 
-		if (current.isPaid)
-			throw new ServiceException("Cannot modify an order that has already been paid.");
+		if (!current.canModify())
+			throw new ServiceException("Cannot modify order.");
 
 		Integer value = current.products.remove(itemID);
 		state.update(current);
@@ -279,11 +280,6 @@ public class OrderQueryProcess extends QueryProcess {
 		}
 	}
 
-	public static final String STATE_CHECKOUT_SEND_PAYMENT = "send-payment";
-	public static final String STATE_CHECKOUT_SEND_STOCK = "send-stock";
-	public static final String STATE_CHECKOUT_REPLENISH_PAYMENT = "replenish-payment";
-	public static final String STATE_CHECKOUT_REPLENISH_STOCK = "replenish-stock";
-
 	private List<QueryProcessResult> checkoutOrder(Message message) throws Exception {
 		OrderState current = state.value();
 		ArrayList<QueryProcessResult> results = new ArrayList<>(2);
@@ -292,7 +288,10 @@ public class OrderQueryProcess extends QueryProcess {
 			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
 
 		if (current.isPaid)
-			throw new ServiceException("Order already paid.");
+			throw new ServiceException("Order has already been paid.");
+
+		if (!current.userChecked)
+			throw new ServiceException("Cannot checkout order.");
 
 		switch (current.checkoutStatus) {
 			case SUCCEEDED:
@@ -307,6 +306,12 @@ public class OrderQueryProcess extends QueryProcess {
 				// fall-through - process this checkout
 			case IN_PROGRESS: {
 				if (current.checkoutProgress == OrderCheckoutProgress.NOT_PROCESSED) {
+
+					if (current.getPrice() <= 0) {
+						this.clearCheckoutState(current, OrderCheckoutStatus.FAILED);
+						state.update(current);
+						throw new ServiceException("Cannot checkout an order with no items.");
+					}
 
 					// send two requests
 					QueryProcessResult stockRequest = sendStockSubtractRequest(current);
@@ -446,20 +451,27 @@ public class OrderQueryProcess extends QueryProcess {
 
 				boolean replenishStockSent = OrderCheckoutProgress.contains(current.checkoutProgress, OrderCheckoutProgress.REPLENISH_STOCK_SENT);
 				boolean replenishPaymentSent = OrderCheckoutProgress.contains(current.checkoutProgress, OrderCheckoutProgress.REPLENISH_PAYMENT_SENT);
+				boolean awaitingStockSend = OrderCheckoutProgress.contains(current.checkoutProgress, OrderCheckoutProgress.AWAITING_SEND_STOCK);
+				boolean awaitingPaymentSend = OrderCheckoutProgress.contains(current.checkoutProgress, OrderCheckoutProgress.AWAITING_SEND_PAYMENT);
 				boolean failedStock = OrderCheckoutProgress.contains(current.checkoutProgress, OrderCheckoutProgress.FAILED_STOCK);
 				boolean failedPayment = OrderCheckoutProgress.contains(current.checkoutProgress, OrderCheckoutProgress.FAILED_PAYMENT);
 
 				// check if we should send replenish request to the stock service
-				if (!replenishStockSent && (failedStock || failedPayment)) {
-					// send replenish stock request
-					current.checkoutProgress |= OrderCheckoutProgress.AWAITING_REPLENISH_STOCK;
-					current.checkoutProgress |= OrderCheckoutProgress.REPLENISH_STOCK_SENT;
-					QueryProcessResult result = sendStockReplenishMessage(current);
-					results.add(result);
+				if (!replenishStockSent && !awaitingStockSend && (failedStock || failedPayment)) {
+					// send replenish stock request, but only if there's something to replenish in the first place
+					if (current.checkoutStock.size() > 0) {
+						current.checkoutProgress |= OrderCheckoutProgress.AWAITING_REPLENISH_STOCK;
+						current.checkoutProgress |= OrderCheckoutProgress.REPLENISH_STOCK_SENT;
+						QueryProcessResult result = sendStockReplenishMessage(current);
+						results.add(result);
+					} else {
+						// if there's nothing to replenish, then don't send any messages
+						current.checkoutProgress |= OrderCheckoutProgress.REPLENISH_STOCK_SENT;
+					}
 				}
 
 				// check if we should send replenish request to the payment service
-				if (!replenishPaymentSent && (failedStock || failedPayment)) {
+				if (!replenishPaymentSent && !awaitingPaymentSend && !failedPayment && failedStock) {
 					// send replenish payment request
 					current.checkoutProgress |= OrderCheckoutProgress.AWAITING_REPLENISH_PAYMENT;
 					current.checkoutProgress |= OrderCheckoutProgress.REPLENISH_PAYMENT_SENT;
@@ -472,12 +484,14 @@ public class OrderQueryProcess extends QueryProcess {
 					// we're done
 					QueryProcessResult result;
 					if (OrderCheckoutProgress.hasSucceeded(current.checkoutProgress)) {
-						result = sendCheckoutSuccessResponse(current);
 						clearCheckoutState(current, OrderCheckoutStatus.SUCCEEDED);
+						current.isPaid = true;
+						result = sendCheckoutSuccessResponse(current);
 					} else if (OrderCheckoutProgress.hasFailed(current.checkoutProgress)
 							&& OrderCheckoutProgress.hasSentBothReplenishRequests(current.checkoutProgress)) {
-						result = sendCheckoutFailureResponse(current, message);
+						List<OrderState.CheckoutMessage> messages = current.checkoutMessages;
 						clearCheckoutState(current, OrderCheckoutStatus.FAILED);
+						result = sendCheckoutFailureResponse(current, message, messages);
 					} else {
 						// this should not happen
 						clearCheckoutState(current, OrderCheckoutStatus.INVALID);
@@ -520,17 +534,17 @@ public class OrderQueryProcess extends QueryProcess {
 		return successResult(current, "Order successfully purchased.");
 	}
 
-	private QueryProcessResult sendCheckoutFailureResponse(OrderState current, Message message) throws Exception {
+	private QueryProcessResult sendCheckoutFailureResponse(OrderState current, Message message, List<OrderState.CheckoutMessage> log) throws Exception {
 		if (current == null)
 			throw new ServiceException.EntryNotFoundException(ENTITY_NAME);
 
 		ObjectNode params = message.params.deepCopy();
-		params.set("log", current.getChecoutMessagesAsJson(objectMapper));
+		params.set("log", OrderState.CheckoutMessage.getMessagesAsJson(objectMapper, log));
 		current.fillJsonNode(params, objectMapper);
 
 		return new QueryProcessResult.Failure(
 				params,
-				"Order checkout failed");
+				"Order checkout failed.");
 	}
 
 	private QueryProcessResult sendStockReplenishMessage(OrderState current) throws Exception {
@@ -544,6 +558,7 @@ public class OrderQueryProcess extends QueryProcess {
 		params.set(PARAM_PRODUCTS, current.getCheckoutStockAsJson(objectMapper));
 		params.put(PARAM_ORDER_ID, current.orderID);
 		params.put(PARAM_USER_ID, current.userID);
+		params.put(PARAM_RETURN_STATE, STATE_CHECKOUT_REPLENISH_STOCK);
 
 		String targetRoute = "batch/add"; // count how many entries are available
 		String targetState = "batch:add";
@@ -564,6 +579,7 @@ public class OrderQueryProcess extends QueryProcess {
 		params.set(PARAM_PRODUCTS, current.getProductsAsJson(objectMapper));
 		params.put(PARAM_ORDER_ID, current.orderID);
 		params.put(PARAM_USER_ID, current.userID);
+		params.put(PARAM_RETURN_STATE, STATE_CHECKOUT_SEND_STOCK);
 
 		String targetRoute = "batch/subtract"; // count how many entries are available
 		String targetState = "batch:subtract";
@@ -589,7 +605,7 @@ public class OrderQueryProcess extends QueryProcess {
 				PAYMENT_IN_TOPIC,
 				message.state.route,
 				params,
-				"do-payment");
+				STATE_CHECKOUT_SEND_PAYMENT);
 	}
 
 	private QueryProcessResult sendCheckoutPaymentCancelRequest(OrderState current, Message message) throws Exception {
@@ -605,7 +621,7 @@ public class OrderQueryProcess extends QueryProcess {
 				PAYMENT_IN_TOPIC,
 				message.state.route,
 				params,
-				"cancel-payment");
+				STATE_CHECKOUT_REPLENISH_PAYMENT);
 	}
 
 	private QueryProcessResult successResult(OrderState state, @Nullable String msg) {

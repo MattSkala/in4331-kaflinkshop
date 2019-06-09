@@ -1,6 +1,7 @@
 package kaflinkshop.User;
 
 import kaflinkshop.*;
+import kaflinkshop.Order.OrderQueryProcess;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.configuration.Configuration;
@@ -68,6 +69,9 @@ public class UserQueryProcess extends QueryProcess {
 			case "orders/remove":
 				result = removeOrder(message);
 				break;
+			case "orders/checkout":
+				result = orderCheckout(message);
+				break;
 
 			// Payment logic
 			case "payment/pay":
@@ -83,6 +87,108 @@ public class UserQueryProcess extends QueryProcess {
 		}
 
 		return Collections.singletonList(result);
+	}
+
+	private QueryProcessResult orderCheckout(Message message) throws Exception {
+		if (message.state.state == null)
+			throw new ServiceException("Unknown message state.");
+
+		switch (message.state.state) {
+			case OrderQueryProcess.STATE_CHECKOUT_SEND_PAYMENT:
+				return checkoutPay(message);
+			case OrderQueryProcess.STATE_CHECKOUT_REPLENISH_PAYMENT:
+				return checkoutCancel(message);
+			default:
+				throw new ServiceException.IllegalStateException(message.state.state);
+		}
+	}
+
+	private QueryProcessResult checkoutPay(Message message) throws Exception {
+		UserState current = state.value();
+		ObjectNode params = message.params.deepCopy();
+
+		if (current == null) {
+			params.put(PARAM_STATE, OperationResult.ERROR.getCode());
+			params.put(PARAM_MESSAGE, "User does not exist.");
+			return new QueryProcessResult.Redirect(
+					PAYMENT_IN_TOPIC,
+					message.state.route,
+					params,
+					message.state.state);
+		}
+
+		long price = message.params.get(PARAM_PRICE).asLong();
+
+		if (price < 0) { // we allow zero here - perhaps there's a free product
+			params.put(PARAM_STATE, OperationResult.ERROR.getCode());
+			params.put(PARAM_MESSAGE, "Price cannot be negative.");
+			return new QueryProcessResult.Redirect(
+					PAYMENT_IN_TOPIC,
+					message.state.route,
+					params,
+					message.state.state);
+		}
+
+		if (current.credits >= price) {
+			current.credits -= price;
+			state.update(current);
+			params.put(PARAM_STATE, OperationResult.SUCCESS.getCode());
+			params.put(PARAM_MESSAGE, "Credits subtracted.");
+			params.put(PARAM_USER_CREDITS, current.credits);
+			return new QueryProcessResult.Redirect(
+					PAYMENT_IN_TOPIC,
+					message.state.route,
+					params,
+					message.state.state);
+		} else {
+			params.put(PARAM_STATE, OperationResult.FAILURE.getCode());
+			params.put(PARAM_MESSAGE, "Not enough credits.");
+			params.put(PARAM_USER_CREDITS, current.credits);
+			return new QueryProcessResult.Redirect(
+					PAYMENT_IN_TOPIC,
+					message.state.route,
+					params,
+					message.state.state);
+		}
+	}
+
+	private QueryProcessResult checkoutCancel(Message message) throws Exception {
+		UserState current = state.value();
+		ObjectNode params = message.params.deepCopy();
+
+		if (current == null) {
+			params.put(PARAM_STATE, OperationResult.ERROR.getCode());
+			params.put(PARAM_MESSAGE, "User does not exist.");
+			return new QueryProcessResult.Redirect(
+					PAYMENT_IN_TOPIC,
+					message.state.route,
+					params,
+					message.state.state);
+		}
+
+		long price = message.params.get(PARAM_PRICE).asLong();
+
+		if (price < 0) { // we allow zero here - perhaps there's a free product
+			params.put(PARAM_STATE, OperationResult.ERROR.getCode());
+			params.put(PARAM_MESSAGE, "Price cannot be negative.");
+			return new QueryProcessResult.Redirect(
+					PAYMENT_IN_TOPIC,
+					message.state.route,
+					params,
+					message.state.state);
+		}
+
+		current.credits += price;
+		state.update(current);
+
+		params.put(PARAM_STATE, OperationResult.SUCCESS.getCode());
+		params.put(PARAM_MESSAGE, "Credits added.");
+		params.put(PARAM_USER_CREDITS, current.credits);
+		return new QueryProcessResult.Redirect(
+				PAYMENT_IN_TOPIC,
+				message.state.route,
+				params,
+				message.state.state);
 	}
 
 	private QueryProcessResult paymentCancel(Message message) throws Exception {

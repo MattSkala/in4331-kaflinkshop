@@ -166,7 +166,7 @@ app.router.add_post('/orders/addItem/{order_id}/{item_id}',
     route_handler('orders/addItem', TOPIC_ORDERS_INPUT, TOPIC_ORDERS_OUTPUT))
 app.router.add_delete('/orders/removeItem/{order_id}/{item_id}',
     route_handler('orders/removeItem', TOPIC_ORDERS_INPUT, TOPIC_ORDERS_OUTPUT))
-app.router.add_post('/orders/checkout/{order_id}/{item_id}',
+app.router.add_post('/orders/checkout/{order_id}',
     route_handler('orders/checkout', TOPIC_ORDERS_INPUT, TOPIC_ORDERS_OUTPUT))
 
 # Stock Service

@@ -1,6 +1,7 @@
 package kaflinkshop.Payment;
 
 import kaflinkshop.*;
+import kaflinkshop.Order.OrderQueryProcess;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.configuration.Configuration;
@@ -25,6 +26,8 @@ public class PaymentQueryProcess extends QueryProcess {
 	public static final String STATE_PAYMENT_USER_PRICE_ERROR = "user-credits-price-error";
 	public static final String STATE_PAYMENT_ORDER_VALIDATE = "order-validate";
 	public static final String STATE_PAYMENT_ORDER_MARK_PAID = "order-mark-paid";
+	public static final String STATE_PAYMENT_USER_PAY = "validate-user-subtract-credits";
+	public static final String STATE_PAYMENT_USER_REFUND = "add-user-credits";
 	public static final String ENTITY_NAME = "payment";
 
 	/**
@@ -58,12 +61,178 @@ public class PaymentQueryProcess extends QueryProcess {
 			case "payment/cancelPayment":
 				result = paymentCancel(message, orderID);
 				break;
+
+			// Orders service
+			case "orders/checkout":
+				result = orderCheckout(message, orderID);
+				break;
+
 			default:
 				throw new ServiceException.IllegalRouteException();
 		}
 
 		return Collections.singletonList(result);
 	}
+
+
+	private QueryProcessResult orderCheckout(Message message, String orderID) throws Exception {
+		PaymentState current = state.value();
+		String messageState = message.state.state;
+
+		// validate state and params
+
+		if (messageState == null)
+			throw new ServiceException.IllegalStateException(messageState);
+
+		if (!message.params.has(PARAM_USER_ID) || !message.params.has(PARAM_PRICE))
+			return getOrderCheckoutErrorResult(message, "Required parameters not provided.");
+
+		String userID = message.params.get(PARAM_USER_ID).asText();
+		long price = message.params.get(PARAM_PRICE).asLong();
+
+		if (price == 0)
+			return getOrderCheckoutErrorResult(message, "Cannot pay for an empty order.");
+
+		if (price < 0)
+			return getOrderCheckoutErrorResult(message, "Price cannot be negative.");
+
+		// do business logic
+
+		switch (messageState) {
+			case OrderQueryProcess.STATE_CHECKOUT_SEND_PAYMENT: {
+				// we need to subtract credits from the user, if possible
+
+				if (current != null && current.status == PaymentStatus.PAID)
+					return getOrderCheckoutErrorResult(message, "Payment has already been paid.");
+
+				switch (message.state.sender) {
+					case CommunicationFactory.SERVICE_ORDER: {
+						// send a request to the Users service
+
+						if (current != null && current.status == PaymentStatus.PROCESSING) {
+							ObjectNode params = message.params.deepCopy();
+							params.put(PARAM_STATE, OperationResult.ERROR.getCode());
+							params.put(PARAM_MESSAGE, "Payment is already being executed.");
+							return new QueryProcessResult.Redirect(
+									ORDER_IN_TOPIC,
+									message.state.route,
+									params,
+									messageState);
+						}
+
+						// create/update payment
+						if (current == null)
+							current = new PaymentState(orderID, PaymentStatus.PROCESSING);
+						else
+							current.status = PaymentStatus.PROCESSING;
+						current.price = price;
+						state.update(current);
+
+						return new QueryProcessResult.Redirect(
+								USER_IN_TOPIC,
+								message.state.route,
+								message.params,
+								messageState);
+					}
+
+					case CommunicationFactory.SERVICE_USER:
+						// send a response back to the Orders service
+
+						if (current == null)
+							return getOrderCheckoutErrorResult(message, "Payment does not exist.");
+
+						int resultCode = message.params.get(PARAM_STATE).asInt();
+						OperationResult operationResult = OperationResult.fromCode(resultCode);
+
+						if (operationResult == OperationResult.SUCCESS)
+							current.status = PaymentStatus.PAID;
+						else if (operationResult == OperationResult.FAILURE)
+							current.status = PaymentStatus.FAILED;
+						else
+							current.status = PaymentStatus.INVALID;
+						state.update(current);
+
+						return new QueryProcessResult.Redirect(
+								ORDER_IN_TOPIC,
+								message.state.route,
+								message.params, // should contain PARAM_STATE and PARAM_MESSAGE fields
+								messageState);
+
+					default:
+						throw new ServiceException("Unknown sender.");
+				}
+
+			}
+
+			case OrderQueryProcess.STATE_CHECKOUT_REPLENISH_PAYMENT: {
+				// we need to add user credits
+
+				if (current == null)
+					return getOrderCheckoutErrorResult(message, "Payment does not exist anymore.");
+
+				if (price != current.price)
+					throw new ServiceException("Payment and order prices do not match.");
+
+				switch (message.state.sender) {
+					case CommunicationFactory.SERVICE_ORDER: {
+						// send a request to the Users service
+
+						if (current.status != PaymentStatus.PAID)
+							return getOrderCheckoutErrorResult(message, "Cannot cancel payment.");
+
+						current.status = PaymentStatus.PROCESSING;
+						state.update(current);
+
+						return new QueryProcessResult.Redirect(
+								USER_IN_TOPIC,
+								message.state.route,
+								message.params,
+								messageState);
+					}
+
+					case CommunicationFactory.SERVICE_USER: {
+						// send a response back to the Orders service
+
+						if (current.status != PaymentStatus.PROCESSING)
+							return getOrderCheckoutErrorResult(message, "Payment is not in the processing state.");
+
+						int resultCode = message.params.get(PARAM_STATE).asInt();
+						OperationResult operationResult = OperationResult.fromCode(resultCode);
+
+						if (operationResult == OperationResult.SUCCESS)
+							current.status = PaymentStatus.CANCELLED;
+						else
+							current.status = PaymentStatus.INVALID;
+						state.update(current);
+
+						return new QueryProcessResult.Redirect(
+								ORDER_IN_TOPIC,
+								message.state.route,
+								message.params, // should contain PARAM_STATE and PARAM_MESSAGE fields
+								messageState);
+					}
+
+					default:
+						throw new ServiceException("Unknown sender.");
+				} // inner switch - sender
+			} // outer switch scope
+
+			default:
+				throw new ServiceException.IllegalStateException(messageState);
+		} // outer switch - state
+	}
+
+	private QueryProcessResult getOrderCheckoutErrorResult(Message message, String msg) {
+		ObjectNode params = message.params.deepCopy();
+		params.put(PARAM_STATE, OperationResult.ERROR.getCode());
+		params.put(PARAM_MESSAGE, msg);
+		return new QueryProcessResult.Redirect(
+				ORDER_IN_TOPIC,
+				message.state.route,
+				params,
+				message.state.state);
+	}
+
 
 	private QueryProcessResult paymentStatus() throws Exception {
 		PaymentState current = state.value();
@@ -165,7 +334,7 @@ public class PaymentQueryProcess extends QueryProcess {
 							USER_IN_TOPIC,
 							message.state.route,
 							message.params,
-							"validate-user-subtract-credits"));
+							STATE_PAYMENT_USER_PAY));
 		}
 
 		// check for the response from the Users service
@@ -259,7 +428,7 @@ public class PaymentQueryProcess extends QueryProcess {
 					USER_IN_TOPIC,
 					message.state.route,
 					message.params,
-					"add-user-credits");
+					STATE_PAYMENT_USER_REFUND);
 		}
 
 		// receive message form the Users service
