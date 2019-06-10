@@ -34,8 +34,7 @@ import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer011;
 
 import java.io.IOException;
 
-import static kaflinkshop.CommunicationFactory.ORDER_IN_TOPIC;
-import static kaflinkshop.CommunicationFactory.STOCK_IN_TOPIC;
+import static kaflinkshop.CommunicationFactory.*;
 
 public class StockJob {
 
@@ -74,7 +73,7 @@ public class StockJob {
 		config.setString(CheckpointingOptions.SAVEPOINT_DIRECTORY, savebackend);
 		RocksDBStateBackendFactory factory = new RocksDBStateBackendFactory();
 		StateBackend backend = factory.createFromConfig(config, null);
-		environment.enableCheckpointing(30000);
+		environment.enableCheckpointing(CHECKPOINT_INTERVAL);
 		environment.setStateBackend(backend);
 
 		// retrieve and process input stream

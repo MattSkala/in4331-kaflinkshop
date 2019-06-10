@@ -55,7 +55,7 @@ public class SimpleJob {
 		config.setString(CheckpointingOptions.SAVEPOINT_DIRECTORY, savebackend);
 		RocksDBStateBackendFactory factory = new RocksDBStateBackendFactory();
 		StateBackend backend = factory.createFromConfig(config, null);
-		environment.enableCheckpointing(30000);
+		environment.enableCheckpointing(CommunicationFactory.CHECKPOINT_INTERVAL);
 		environment.setStateBackend(backend);
 		environment.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 

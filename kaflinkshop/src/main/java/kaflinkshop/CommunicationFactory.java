@@ -49,6 +49,8 @@ public class CommunicationFactory {
 	public final static String KAFKA_DEFAULT_ADDRESS = getEnvOrDefault("KAFKA_HOST", "localhost") + ":9092";
 	public final static String ZOOKEEPER_DEFAULT_ADDRESS = getEnvOrDefault("ZOOKEEPER_HOST", "localhost") + ":2181";
 
+	public final static long CHECKPOINT_INTERVAL = 10000;
+
 	private static String getEnvOrDefault(String name, String fallback) {
 		String host = System.getenv(name);
 		if (host == null) {
