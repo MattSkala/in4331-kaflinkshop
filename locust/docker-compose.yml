@@ -1,0 +1,13 @@
+version: '3'
+services:
+  locust:
+    build: .
+    image: 804992950117.dkr.ecr.us-east-2.amazonaws.com/locust-test
+    environment:
+      - TARGET_URL=http://18.191.67.92:8080
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: kaflinkshop
+        awslogs-region: us-east-2
+        awslogs-stream-prefix: locust

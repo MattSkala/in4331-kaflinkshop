@@ -60,6 +60,8 @@ services:
       - JOB_MANAGER_RPC_ADDRESS=jobmanager
       - KAFKA_HOST=kafka
       - ZOOKEEPER_HOST=zookeeper
+    volumes:
+      - flink-volume:/flink
     logging:
       driver: awslogs
       options:
@@ -79,6 +81,8 @@ services:
       - JOB_MANAGER_RPC_ADDRESS=jobmanager
       - KAFKA_HOST=kafka
       - ZOOKEEPER_HOST=zookeeper
+    volumes:
+      - flink-volume:/flink
     logging:
       driver: awslogs
       options:
@@ -98,6 +102,8 @@ services:
       - JOB_MANAGER_RPC_ADDRESS=jobmanager
       - KAFKA_HOST=kafka
       - ZOOKEEPER_HOST=zookeeper
+    volumes:
+      - flink-volume:/flink
     logging:
       driver: awslogs
       options:
@@ -120,3 +126,5 @@ services:
         awslogs-group: kaflinkshop
         awslogs-region: us-east-2
         awslogs-stream-prefix: api
+volumes:
+  flink-volume:

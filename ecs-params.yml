@@ -6,19 +6,24 @@ task_definition:
       mem_limit: 524288000
     jobmanager:
       cpu_shares: 10
-      mem_limit: 524288000
+      mem_limit: 2000000000
     taskmanager:
       cpu_shares: 10
-      mem_limit: 4000000000
+      mem_limit: 3000000000
     taskmanager_2:
       cpu_shares: 10
-      mem_limit: 4000000000
+      mem_limit: 3000000000
     taskmanager_3:
       cpu_shares: 10
-      mem_limit: 4000000000
+      mem_limit: 3000000000
     api:
       cpu_shares: 10
       mem_limit: 524288000
     flinkjobs:
       cpu_shares: 10
       mem_limit: 524288000
+  docker_volumes:
+    - name: flink-volume
+      scope: shared
+      autoprovision: true
+      driver: local
