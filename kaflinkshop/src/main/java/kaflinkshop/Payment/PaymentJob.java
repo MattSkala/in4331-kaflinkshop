@@ -23,8 +23,10 @@ import kaflinkshop.JobParams;
 import kaflinkshop.SimpleJob;
 import kaflinkshop.SimpleMessageKeyExtractor;
 
+import java.io.IOException;
+
 public class PaymentJob {
-	public static void main(String[] args) {
+	public static void main(String[] args) throws IOException {
 		JobParams params = new JobParams();
 		params.kafkaAddress = CommunicationFactory.KAFKA_DEFAULT_ADDRESS;
 		params.inputTopic = CommunicationFactory.PAYMENT_IN_TOPIC;

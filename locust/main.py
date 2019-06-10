@@ -1,4 +1,4 @@
-from locust import Locust, HttpLocust, TaskSet, task
+from locust import Locust, HttpLocust, TaskSet, task, events
 import json
 import random
 import resource
@@ -86,7 +86,7 @@ class Webshop(TaskSet):
             order_id = data['result']['params']['order_id']
             setOrders.add(order_id)
 
-    @task(4)
+    @task(1)
     def removeOrderRoutine(self):
         if len(setOrders) > 0:
             order_id = random.choice(list(setOrders))
@@ -117,7 +117,7 @@ class Webshop(TaskSet):
 
             assert item_id in data['result']['params']['products']
 
-    @task(2)
+    @task(1)
     def removeItemFromOrderRoutine(self):
         if (len(setOrders) > 0):
             order_id = random.choice(list(setOrders))
@@ -136,13 +136,12 @@ class Webshop(TaskSet):
                 data = json.loads(response.text)
                 assert item_id not in data['result']['params']['products']
 
-    @task(1)
+    @task(5)
     def orderCheckout(self):
         if (len(setOrders) > 0) & (len(setItems) > 0):
             order_id = random.choice(list(setOrders))
             item_id = random.choice(list(setItems))
             setOrders.remove(order_id)
-
             plus_amount = 10
             ## Make sure there is something to checkout
             response = self.client.post("/orders/addItem/"+order_id+"/" + item_id, name="/orders/addItem/{order_id}/{item_id}")
@@ -150,8 +149,21 @@ class Webshop(TaskSet):
 
             response = self.client.post("/orders/checkout/" + order_id, name="/orders/checkout/{order_id}")
             data = json.loads(response.text)
-            print(data)
-            assert data['result']['result'] == 'success'
+            if data['result']['message'] == "Order checkout failed.":
+                events.request_success.fire(
+                    request_type="LOGIC",
+                    name="Order checkout reverted: " + data['result']['message'],
+                    response_time=0,
+                    response_length=0,
+                )
+            else:
+                events.request_success.fire(
+                    request_type="LOGIC",
+                    name="Order checkout done: " + data['result']['message'],
+                    response_time=0,
+                    response_length=0,
+                )
+                assert data['result']['result'] == 'success'
 
 
 
