@@ -126,6 +126,8 @@ async def send_request(app, topic, route, params):
         response = await asyncio.wait_for(fut, timeout=TIMEOUT)
         del response['input']['request_id']
         response['input'] = None
+        response['path'] = None
+        response['state'] = None
         return response
     except asyncio.TimeoutError:
         # print('request #' + request_id + ' timed out')
