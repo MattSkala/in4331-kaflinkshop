@@ -20,19 +20,26 @@ package kaflinkshop.Stock;
 
 import kaflinkshop.*;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
+import org.apache.flink.configuration.CheckpointingOptions;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.contrib.streaming.state.RocksDBStateBackendFactory;
+import org.apache.flink.runtime.state.StateBackend;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
+import org.apache.flink.streaming.api.environment.CheckpointConfig;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer011;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer011;
+
+import java.io.IOException;
 
 import static kaflinkshop.CommunicationFactory.ORDER_IN_TOPIC;
 import static kaflinkshop.CommunicationFactory.STOCK_IN_TOPIC;
 
 public class StockJob {
 
-	public static void main(String[] args) {
+	public static void main(String[] args) throws IOException {
 		// define job params
 		JobParams params = new JobParams();
 		params.kafkaAddress = CommunicationFactory.KAFKA_DEFAULT_ADDRESS;
@@ -54,6 +61,21 @@ public class StockJob {
 
 		// get the execution environment
 		StreamExecutionEnvironment environment = StreamExecutionEnvironment.getExecutionEnvironment();
+
+		// Checkpointing and saving
+		String filebackend = "file:///rocksDBcheck" + params.defaultOutputTopic + "/";
+		String savebackend = "file:///rocksDBsave" + params.defaultOutputTopic + "/";
+		CheckpointConfig checkpointConfig = environment.getCheckpointConfig();
+		checkpointConfig.enableExternalizedCheckpoints(CheckpointConfig.ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION);
+		Configuration config = new Configuration();
+		config.setString(CheckpointingOptions.CHECKPOINTS_DIRECTORY, filebackend);
+		config.setBoolean(CheckpointingOptions.LOCAL_RECOVERY, true);
+		config.setBoolean(CheckpointingOptions.INCREMENTAL_CHECKPOINTS, false);
+		config.setString(CheckpointingOptions.SAVEPOINT_DIRECTORY, savebackend);
+		RocksDBStateBackendFactory factory = new RocksDBStateBackendFactory();
+		StateBackend backend = factory.createFromConfig(config, null);
+		environment.enableCheckpointing(10000);
+		environment.setStateBackend(backend);
 
 		// retrieve and process input stream
 		SingleOutputStreamOperator<Message> stream = environment.addSource(new FlinkKafkaConsumer011<>(params.inputTopic, new SimpleStringSchema(), params.properties))
