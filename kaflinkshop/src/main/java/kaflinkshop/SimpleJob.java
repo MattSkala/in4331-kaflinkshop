@@ -51,7 +51,7 @@ public class SimpleJob {
 		Configuration config = new Configuration();
 		config.setString(CheckpointingOptions.CHECKPOINTS_DIRECTORY, filebackend);
 		config.setBoolean(CheckpointingOptions.LOCAL_RECOVERY, true);
-		config.setBoolean(CheckpointingOptions.INCREMENTAL_CHECKPOINTS, false);
+		config.setBoolean(CheckpointingOptions.INCREMENTAL_CHECKPOINTS, true);
 		config.setString(CheckpointingOptions.SAVEPOINT_DIRECTORY, savebackend);
 		RocksDBStateBackendFactory factory = new RocksDBStateBackendFactory();
 		StateBackend backend = factory.createFromConfig(config, null);
