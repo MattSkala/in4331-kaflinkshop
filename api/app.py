@@ -7,7 +7,7 @@ import os
 
 import resource
 soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
+resource.setrlimit(resource.RLIMIT_NOFILE, (999999, 999999))
 # distinguishes between Flink jobs and HTTP server services
 SERVICE_ID = 'api1'
 
@@ -125,6 +125,7 @@ async def send_request(app, topic, route, params):
         # print('sending request #' + request_id + ' ' + str(request))
         response = await asyncio.wait_for(fut, timeout=TIMEOUT)
         del response['input']['request_id']
+        response['input'] = None
         return response
     except asyncio.TimeoutError:
         # print('request #' + request_id + ' timed out')
