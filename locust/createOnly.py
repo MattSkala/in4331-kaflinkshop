@@ -10,17 +10,21 @@ setItems = set()
 
 class Webshop(TaskSet):
     @task(1)
-    def createUser(self):
-        response = self.client.post("/users/create")
-        data = json.loads(response.text)
-        user_id = data['result']['params']['user_id']
-        setUsers.add(user_id)
-    @task(1)
-    def createItem(self):
-        response = self.client.post("/stock/item/create", name="/stock/item/create")
-        data = json.loads(response.text)
-        item_id = data['result']['params']['item_id']
-        setItems.add(item_id)
+    def orderCheckout(self):
+        if (len(setOrders) > 0) & (len(setItems) > 0):
+            order_id = random.choice(list(setOrders))
+            item_id = random.choice(list(setItems))
+            setOrders.remove(order_id)
+
+            plus_amount = 10
+            ## Make sure there is something to checkout
+            response = self.client.post("/orders/addItem/"+order_id+"/" + item_id, name="/orders/addItem/{order_id}/{item_id}")
+            response = self.client.post("/stock/add/" + item_id + "/" +str(plus_amount), name="/stock/add/{item_id}/{number}")
+
+            response = self.client.post("/orders/checkout/" + order_id, name="/orders/checkout/{order_id}")
+            data = json.loads(response.text)
+            print(data)
+            assert data['result']['result'] == 'success'
 
 class WebsiteUser(HttpLocust):
     task_set = Webshop

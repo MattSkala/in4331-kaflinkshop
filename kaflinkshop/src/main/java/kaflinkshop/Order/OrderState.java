@@ -1,5 +1,6 @@
 package kaflinkshop.Order;
 
+import kaflinkshop.Message;
 import kaflinkshop.OperationResult;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
@@ -24,6 +25,7 @@ public class OrderState {
 	public int checkoutProgress = OrderCheckoutProgress.NOT_PROCESSED;
 	public List<CheckoutMessage> checkoutMessages;
 	public Map<String, Long> checkoutStock;
+	public Message latestMessage;
 
 	public OrderState() {
 		this.products = new HashMap<>();

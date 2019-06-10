@@ -8,6 +8,7 @@ import org.apache.flink.contrib.streaming.state.RocksDBKeyedStateBackend;
 import org.apache.flink.contrib.streaming.state.RocksDBStateBackend;
 import org.apache.flink.contrib.streaming.state.RocksDBStateBackendFactory;
 import org.apache.flink.runtime.state.StateBackend;
+import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.CheckpointConfig;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -43,8 +44,8 @@ public class SimpleJob {
 		StreamExecutionEnvironment environment = StreamExecutionEnvironment.getExecutionEnvironment();
 
 		// Checkpointing and saving
-		String filebackend = "file:///rocksDBcheck" + params.defaultOutputTopic + "/";
-		String savebackend = "file:///rocksDBsave" + params.defaultOutputTopic + "/";
+		String filebackend = "file:///flink/rocksDBcheck" + params.defaultOutputTopic + "/";
+		String savebackend = "file:///flink/rocksDBsave" + params.defaultOutputTopic + "/";
 		CheckpointConfig checkpointConfig = environment.getCheckpointConfig();
 		checkpointConfig.enableExternalizedCheckpoints(CheckpointConfig.ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION);
 		Configuration config = new Configuration();
@@ -54,8 +55,9 @@ public class SimpleJob {
 		config.setString(CheckpointingOptions.SAVEPOINT_DIRECTORY, savebackend);
 		RocksDBStateBackendFactory factory = new RocksDBStateBackendFactory();
 		StateBackend backend = factory.createFromConfig(config, null);
-		environment.enableCheckpointing(10000);
+		environment.enableCheckpointing(30000);
 		environment.setStateBackend(backend);
+		environment.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 
 		// retrieve and process input stream
 		environment.addSource(new FlinkKafkaConsumer011<>(params.inputTopic, new SimpleStringSchema(), params.properties))

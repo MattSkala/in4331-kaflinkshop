@@ -63,8 +63,8 @@ public class StockJob {
 		StreamExecutionEnvironment environment = StreamExecutionEnvironment.getExecutionEnvironment();
 
 		// Checkpointing and saving
-		String filebackend = "file:///rocksDBcheck" + params.defaultOutputTopic + "/";
-		String savebackend = "file:///rocksDBsave" + params.defaultOutputTopic + "/";
+		String filebackend = "file:///flink/rocksDBcheck" + params.defaultOutputTopic + "/";
+		String savebackend = "file:///flink/rocksDBsave" + params.defaultOutputTopic + "/";
 		CheckpointConfig checkpointConfig = environment.getCheckpointConfig();
 		checkpointConfig.enableExternalizedCheckpoints(CheckpointConfig.ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION);
 		Configuration config = new Configuration();
@@ -74,7 +74,7 @@ public class StockJob {
 		config.setString(CheckpointingOptions.SAVEPOINT_DIRECTORY, savebackend);
 		RocksDBStateBackendFactory factory = new RocksDBStateBackendFactory();
 		StateBackend backend = factory.createFromConfig(config, null);
-		environment.enableCheckpointing(10000);
+		environment.enableCheckpointing(30000);
 		environment.setStateBackend(backend);
 
 		// retrieve and process input stream
