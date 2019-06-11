@@ -61,20 +61,22 @@ public class StockJob {
 		// get the execution environment
 		StreamExecutionEnvironment environment = StreamExecutionEnvironment.getExecutionEnvironment();
 
-		// Checkpointing and saving
-		String filebackend = "file:///flink/rocksDBcheck" + params.defaultOutputTopic + "/";
-		String savebackend = "file:///flink/rocksDBsave" + params.defaultOutputTopic + "/";
-		CheckpointConfig checkpointConfig = environment.getCheckpointConfig();
-		checkpointConfig.enableExternalizedCheckpoints(CheckpointConfig.ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION);
-		Configuration config = new Configuration();
-		config.setString(CheckpointingOptions.CHECKPOINTS_DIRECTORY, filebackend);
-		config.setBoolean(CheckpointingOptions.LOCAL_RECOVERY, true);
-		config.setBoolean(CheckpointingOptions.INCREMENTAL_CHECKPOINTS, true);
-		config.setString(CheckpointingOptions.SAVEPOINT_DIRECTORY, savebackend);
-		RocksDBStateBackendFactory factory = new RocksDBStateBackendFactory();
-		StateBackend backend = factory.createFromConfig(config, null);
-		environment.enableCheckpointing(CHECKPOINT_INTERVAL);
-		environment.setStateBackend(backend);
+		if(ENABLE_CHECKPOINTING) {
+			// Checkpointing and saving
+			String filebackend = "file:///flink/rocksDBcheck" + params.defaultOutputTopic + "/";
+			String savebackend = "file:///flink/rocksDBsave" + params.defaultOutputTopic + "/";
+			CheckpointConfig checkpointConfig = environment.getCheckpointConfig();
+			checkpointConfig.enableExternalizedCheckpoints(CheckpointConfig.ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION);
+			Configuration config = new Configuration();
+			config.setString(CheckpointingOptions.CHECKPOINTS_DIRECTORY, filebackend);
+			config.setBoolean(CheckpointingOptions.LOCAL_RECOVERY, true);
+			config.setBoolean(CheckpointingOptions.INCREMENTAL_CHECKPOINTS, true);
+			config.setString(CheckpointingOptions.SAVEPOINT_DIRECTORY, savebackend);
+			RocksDBStateBackendFactory factory = new RocksDBStateBackendFactory();
+			StateBackend backend = factory.createFromConfig(config, null);
+			environment.enableCheckpointing(CHECKPOINT_INTERVAL);
+			environment.setStateBackend(backend);
+		}
 
 		// retrieve and process input stream
 		SingleOutputStreamOperator<Message> stream = environment.addSource(new FlinkKafkaConsumer011<>(params.inputTopic, new SimpleStringSchema(), params.properties))

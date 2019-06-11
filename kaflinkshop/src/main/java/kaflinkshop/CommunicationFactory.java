@@ -50,6 +50,7 @@ public class CommunicationFactory {
 	public final static String ZOOKEEPER_DEFAULT_ADDRESS = getEnvOrDefault("ZOOKEEPER_HOST", "localhost") + ":2181";
 
 	public final static long CHECKPOINT_INTERVAL = 10000;
+	public final static boolean ENABLE_CHECKPOINTING = false;
 
 	private static String getEnvOrDefault(String name, String fallback) {
 		String host = System.getenv(name);
